@@ -35,11 +35,11 @@ class Bridge(private val activity: MainActivity) {
 
     /** Returns a JSON string {"ok":bool,"admin":bool,"error":string}. */
     private fun doLogin(id: String, password: String): String {
-        val base = PIXEL_WEB_URL.trimEnd('/')
+        val base = HAGURUMA_WEB_URL.trimEnd('/')
         val out = JSONObject()
         var conn: HttpURLConnection? = null
         try {
-            val url = URL("$base/api/pixel/login")
+            val url = URL("$base/api/haguruma/login")
             val body = JSONObject().put("id", id).put("password", password).toString()
             conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -70,6 +70,8 @@ class Bridge(private val activity: MainActivity) {
     }
 
     companion object {
-        const val PIXEL_WEB_URL = "https://pixel-code-web.vercel.app"
+        // Operator credentials backend — mirrors the desktop はぐるま
+        // (src/data/auth.ts) which posts to /api/haguruma/login on haguruma.web.
+        const val HAGURUMA_WEB_URL = "https://haguruma.vercel.app"
     }
 }

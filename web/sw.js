@@ -1,6 +1,6 @@
 // Minimal service worker — just enough to make the panel installable
 // ("app feel"). Never caches the live bridge endpoints.
-var SHELL = 'pixel-shell-v1';
+var SHELL = 'haguruma-shell-v1';
 var ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', function (e) {

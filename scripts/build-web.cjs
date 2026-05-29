@@ -40,7 +40,7 @@ fs.copyFileSync(path.join(SRC, 'output.css'), path.join(OUT, 'output.css'));
 let html = fs.readFileSync(path.join(SRC, 'main.html'), 'utf8');
 const headInject =
   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
-  '<meta name="theme-color" content="#0b0d12">\n' +
+  '<meta name="theme-color" content="#f4ede0">\n' +
   '<meta name="mobile-web-app-capable" content="yes">\n' +
   '<meta name="apple-mobile-web-app-capable" content="yes">\n' +
   '<link rel="manifest" href="/manifest.webmanifest">\n' +
