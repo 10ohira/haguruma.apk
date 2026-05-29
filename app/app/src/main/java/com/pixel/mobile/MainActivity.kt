@@ -100,47 +100,57 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private fun page(body: String) =
-            "<html><body style='background:#08080b;color:#b8b8c5;" +
-            "font:16px system-ui;display:flex;align-items:center;" +
+            "<html><body style='background:#f4ede0;color:#5d564b;" +
+            "font:16px \"IBM Plex Sans\",system-ui,sans-serif;display:flex;align-items:center;" +
             "justify-content:center;height:100vh;margin:0;text-align:center'>" +
             "<div style='max-width:80%'>$body</div></body></html>"
 
         private val WAITING_HTML =
-            page("Waiting for the Pixel agent…<br><br><small>The control panel appears once injection finishes.</small>")
+            page("はぐるまエージェントを待機中…<br><br><small>注入が完了すると操作パネルが表示されます。</small>")
 
-        // Branded local login -> connect shell. Plain HTML/CSS/JS (no build step,
-        // no external fonts) styled with the desktop pixel theme. Talks to the
-        // native bridge (window.PixelNative) for real auth + root injection.
+        // Branded local login -> connect shell. Plain HTML/CSS/JS styled with the
+        // desktop はぐるま "workshop" theme (charcoal on cream, square corners,
+        // hairline borders, orange accent, gear logo). Talks to the native bridge
+        // (window.PixelNative) for real operator auth + root injection.
         private val SHELL_HTML = """
 <!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@500;700&display=swap" media="print" onload="this.media='all'">
 <style>
   :root{
-    --bg:#08080b; --t1:#f4f4f8; --t2:#b8b8c5; --t3:#7d7d8c;
-    --accent:#7c9eff; --accent2:#b794f6; --accent3:#38bdf8; --err:#f87171;
-    --line:rgba(255,255,255,.10); --surf:rgba(255,255,255,.04);
+    --bg:#f4ede0; --bg2:#fbf6ec; --t1:#1f1a14; --t2:#5d564b; --t3:#8a8275;
+    --accent:#c45a2c; --accent-deep:#9c3f17; --gold:#e8a838; --err:#b14638;
+    --line:#d8cbb0; --surf:#fbf6ec;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%}
-  body{background:radial-gradient(120% 80% at 50% -10%,#12121a 0%,var(--bg) 60%);
-    color:var(--t1);font:500 15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  body{
+    background:
+      linear-gradient(transparent 23px, rgba(31,26,20,.045) 24px),
+      linear-gradient(90deg, transparent 23px, rgba(31,26,20,.045) 24px),
+      var(--bg);
+    background-size:24px 24px,24px 24px,auto;
+    color:var(--t1);font:500 15px/1.5 'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     display:flex;align-items:center;justify-content:center;padding:24px}
   .card{width:100%;max-width:360px;text-align:center}
-  .logo{width:104px;height:104px;margin:0 auto 4px;filter:drop-shadow(0 8px 36px rgba(124,158,255,.45));
-    animation:float 5s ease-in-out infinite}
-  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
-  .word{font-weight:800;letter-spacing:.18em;font-size:30px;margin:6px 0 2px;
-    background:linear-gradient(92deg,var(--accent3),var(--accent),var(--accent2));
-    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-  .meta{color:var(--t3);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px}
-  input{width:100%;margin:7px 0;padding:13px 14px;text-align:center;color:var(--t1);
-    background:var(--surf);border:1px solid var(--line);border-radius:12px;font-size:15px;outline:none}
-  input:focus{border-color:var(--accent)}
+  .logo{width:104px;height:104px;margin:0 auto 6px;
+    animation:spin 24s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .word{font-family:'Noto Sans JP','IBM Plex Sans',sans-serif;font-weight:700;
+    letter-spacing:.08em;font-size:34px;margin:4px 0 4px;color:var(--t1)}
+  .meta{font-family:'IBM Plex Mono',monospace;color:var(--t3);font-size:11px;
+    letter-spacing:.22em;text-transform:uppercase;margin-bottom:26px}
+  input{width:100%;margin:6px 0;padding:13px 14px;text-align:center;color:var(--t1);
+    background:var(--surf);border:1px solid var(--line);border-radius:0;font-size:15px;outline:none;
+    font-family:'IBM Plex Mono',monospace}
+  input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(196,90,44,.12)}
   input::placeholder{color:var(--t3)}
-  button{width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;cursor:pointer;
-    font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:#0b0d12;
-    background:linear-gradient(92deg,var(--accent),var(--accent2));
-    box-shadow:0 8px 24px rgba(124,158,255,.30);transition:opacity .2s,transform .05s}
+  button{width:100%;margin-top:14px;padding:14px;border:1px solid var(--accent-deep);border-radius:0;cursor:pointer;
+    font-weight:700;font-size:13px;letter-spacing:.10em;text-transform:uppercase;color:#fbf6ec;
+    background:var(--accent);transition:background .15s,transform .05s}
+  button:hover{background:var(--accent-deep)}
   button:active{transform:translateY(1px)}
   button:disabled{opacity:.55;cursor:default}
   .msg{min-height:18px;margin-top:12px;font-size:13px;color:var(--err)}
@@ -150,24 +160,42 @@ class MainActivity : AppCompatActivity() {
 </style></head>
 <body>
   <div class="card">
-    <svg class="logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <svg class="logo" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="g1" x1="56.79" y1="52.38" x2="295.99" y2="291.59" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="#e7f4ff"/><stop offset=".51" stop-color="#9aedff"/><stop offset="1" stop-color="#18ccff"/>
+        <linearGradient id="big" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#4f86e3"/><stop offset="1" stop-color="#2a5db8"/>
         </linearGradient>
-        <linearGradient id="g2" x1="240.29" y1="140.5" x2="462" y2="362.21" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="#f8eaff"/><stop offset=".51" stop-color="#eaabff"/><stop offset="1" stop-color="#de36ff"/>
-        </linearGradient>
-        <linearGradient id="g3" x1="98.41" y1="251.76" x2="313.13" y2="466.48" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="#fff4ec"/><stop offset=".51" stop-color="#ffeda6"/><stop offset="1" stop-color="#ffcc31"/>
+        <linearGradient id="small" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f0b94a"/><stop offset="1" stop-color="#c88a1a"/>
         </linearGradient>
       </defs>
-      <rect opacity=".8" fill="url(#g1)" x="56.79" y="52.38" width="250.94" height="250.94"/>
-      <rect opacity=".8" fill="url(#g2)" x="231.79" y="132" width="232.6" height="232.6"/>
-      <rect opacity=".8" fill="url(#g3)" x="90.17" y="243.53" width="225.26" height="225.26"/>
+      <g transform="translate(72 78)" fill="url(#big)">
+        <circle cx="0" cy="0" r="48"/>
+        <g>
+          <rect x="-7" y="-66" width="14" height="22" rx="3"/><rect x="-7" y="44" width="14" height="22" rx="3"/>
+          <rect x="-66" y="-7" width="22" height="14" rx="3"/><rect x="44" y="-7" width="22" height="14" rx="3"/>
+          <g transform="rotate(45)">
+            <rect x="-7" y="-66" width="14" height="22" rx="3"/><rect x="-7" y="44" width="14" height="22" rx="3"/>
+            <rect x="-66" y="-7" width="22" height="14" rx="3"/><rect x="44" y="-7" width="22" height="14" rx="3"/>
+          </g>
+        </g>
+      </g>
+      <circle cx="72" cy="78" r="22" fill="#fbf6ec"/>
+      <g transform="translate(140 130)" fill="url(#small)">
+        <circle cx="0" cy="0" r="28"/>
+        <g>
+          <rect x="-4" y="-38" width="8" height="13" rx="2"/><rect x="-4" y="25" width="8" height="13" rx="2"/>
+          <rect x="-38" y="-4" width="13" height="8" rx="2"/><rect x="25" y="-4" width="13" height="8" rx="2"/>
+          <g transform="rotate(45)">
+            <rect x="-4" y="-38" width="8" height="13" rx="2"/><rect x="-4" y="25" width="8" height="13" rx="2"/>
+            <rect x="-38" y="-4" width="13" height="8" rx="2"/><rect x="25" y="-4" width="13" height="8" rx="2"/>
+          </g>
+        </g>
+      </g>
+      <circle cx="140" cy="130" r="11" fill="#fbf6ec"/>
     </svg>
-    <div class="word">PIXEL</div>
-    <div class="meta">v1.0 &middot; MilkChoco</div>
+    <div class="word">はぐるま</div>
+    <div class="meta">v1.56.0 &middot; Workshop &middot; MilkChoco</div>
 
     <div id="view-login">
       <input id="id" type="text" placeholder="ID" autocomplete="username" spellcheck="false" autocapitalize="none">

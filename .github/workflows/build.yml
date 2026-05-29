@@ -1,8 +1,8 @@
-name: Build Pixel
+name: Build はぐるま
 
 on:
   push:
-    branches: [main, master, claude/lua-tool-standalone-Erpd2]
+    branches: [main, master, claude/haguruma-apk-overhaul-hd41c]
     tags: ['v*']
   workflow_dispatch: {}
 
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  # The single installable deliverable: Pixel.apk (login -> connect -> panel).
+  # The single installable deliverable: haguruma.apk (login -> connect -> panel).
   apk:
     runs-on: ubuntu-latest
     steps:
@@ -32,11 +32,11 @@ jobs:
         working-directory: app
         run: gradle --no-daemon assembleDebug
       - name: Rename APK
-        run: cp app/app/build/outputs/apk/debug/app-debug.apk Pixel.apk
+        run: cp app/app/build/outputs/apk/debug/app-debug.apk haguruma.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-apk
-          path: Pixel.apk
+          name: haguruma-apk
+          path: haguruma.apk
 
   # Manual fallback: the injectable agent + per-ABI zips (frida-inject + launch.sh).
   bundle:
@@ -80,10 +80,10 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: Pixel ${{ steps.ver.outputs.tag }}
+          name: はぐるま ${{ steps.ver.outputs.tag }}
           body_path: RELEASE_NOTES.md
           files: |
-            artifacts/**/Pixel.apk
+            artifacts/**/haguruma.apk
             artifacts/**/*.zip
             artifacts/**/agent.js
         env:

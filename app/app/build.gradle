@@ -8,7 +8,10 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId 'com.pixel.mobile'
+        // Installed package identity matches the desktop はぐるま appId
+        // (com.tenohira.haguruma). The Kotlin/R namespace stays com.pixel.mobile
+        // to avoid churning the source tree — it is never user-visible.
+        applicationId 'com.tenohira.haguruma'
         minSdk 26
         targetSdk 34
         versionCode 156

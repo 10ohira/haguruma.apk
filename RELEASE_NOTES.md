@@ -1,25 +1,45 @@
-# Pixel v1.56.0
+# はぐるま v1.56.0 (Android)
 
-The first **aim-focused, anti-cheat-aware** build of the standalone Pixel APK.
-Drop the APK on a rooted phone with MilkChoco installed, log in, tap **Connect
-to MilkChoco**, and the aim panel loads at `http://127.0.0.1:27345`.
+The Android port of the desktop **はぐるま** tool, now matching the desktop
+build's **login, operation, feature surface, UI and design**. Drop the APK on a
+rooted phone with MilkChoco installed, sign in with your **operator ID +
+password**, tap **Connect to MilkChoco**, and the control panel loads at
+`http://127.0.0.1:27345`.
 
 ## Install
 
-1. Download **`Pixel.apk`** below.
+1. Download **`haguruma.apk`** below.
 2. Install on a **rooted** phone (Magisk / KernelSU OK) that already has
    MilkChoco (`com.gameparadiso.milkchoco`).
-3. Open **Pixel** → log in with your key → tap **Connect to MilkChoco** →
-   approve `su`. The panel loads once injection finishes.
+3. Open **はぐるま** → log in with your operator ID + password → tap
+   **Connect to MilkChoco** → approve `su`. The panel loads once injection
+   finishes.
 
-`pixel-mobile-<abi>.zip` (also attached) is the manual-injection fallback:
+`haguruma-mobile-<abi>.zip` (also attached) is the manual-injection fallback:
 unzip on the phone and run `su sh launch.sh` — no APK needed.
 
-## What's in the panel
+## What changed in this build
 
-The cheats list was pared down to **aim-only**, with all advanced math
-exposed as plain-language knobs (Follow Speed, Target Range, Skip
-Teammates / Dead Players):
+### Desktop parity — login
+
+Login now uses the same **operator credentials** flow as the desktop build:
+the native shell posts `{ id, password }` to **`/api/haguruma/login`** on
+`haguruma.vercel.app` (mirrors desktop `src/data/auth.ts`), instead of the old
+`pixel-code` endpoint.
+
+### Desktop parity — UI & design
+
+The whole app is reskinned with the desktop **"Workshop" design system** —
+charcoal-on-cream (`#f4ede0`), orange accent (`#c45a2c`), hairline borders,
+square corners, IBM Plex type, and the twin-gear (歯車 → はぐるま) logo. The
+native login/connect shell, the in-app panel, the app name, the launcher icon
+and the package identity (`com.tenohira.haguruma`) are all rebranded はぐるま.
+
+### Panel features (mobile-usable subset)
+
+The agent (`agent/agent.ts`) and offset tables are the **same** as desktop, so
+all in-game math is identical. The phone panel exposes the cheats that don't
+need a desktop-only system overlay or global keyboard hook:
 
 - **Aimbot** — lock-style aim toward the closest in-FOV enemy
 - **Aim Assist** — slows the camera toward an enemy while shooting (no lock)
@@ -29,55 +49,15 @@ Teammates / Dead Players):
 - **Slot Kicker** — `FMatchKickUserSlot` per slot, kick-all, auto-loop
 - **Teleport** — per-map CTM milk / choco preset coordinates
 
-## What changed under the hood
+### How it works
 
-### Smooth aim follow (no more snap-snap)
-
-All three aim functions share a single helper:
-
-```ts
-factor = 1 - exp(-rate * dt)
-nyaw   = yaw + (targetYaw - yaw) * factor
-```
-
-`rate` scales with the Speed slider; `dt` is the actual frame delta. The
-camera always closes the angular gap over multiple frames — fast when far,
-easing as it closes in. There is no setting that produces a single-frame
-snap, even at Speed 100.
-
-### Xigncode bypass moved into the agent
-
-The desktop build (`pixel.exe`) installs the Xigncode hook as a *pre-script*
-before spawning MilkChoco. The standalone APK can only `attach`, so the same
-`Java.perform` block now lives at the top of `agent/agent.ts`:
-
-- `XigncodeClientSystem.initialize` → calls the original with a fake
-  `Callback` whose `OnHackDetected`, `OnLog`, and `SendPacket` are no-ops.
-- `XigncodeClientSystem.getCookie2` → routes the original value through so the
-  login flow stays intact.
-
-### `--realm=emulated` by default
-
-`launch.sh` and `Injector.kt` now pass **`--realm=emulated`** to
-`frida-inject`, running the agent's JS context inside Frida's Stalker-based
-emulator. Xigncode's memory and module scans no longer see the Frida runtime
-even though the agent is attached.
-
-Every Frida API the agent uses (`Java.perform`, `Module.findExportByName`,
-`NativeFunction`, `Interceptor.attach`, `Memory.protect/alloc`,
-`Socket.listen`, `setInterval`) is realm-compatible — audited line by line.
-The launcher probes `frida-inject --help` first and silently drops the flag
-on older builds that don't know it. Set `PIXEL_REALM=native` to force the old
-behavior.
-
-### Inject button no longer kills the game
-
-The previous build force-stopped MilkChoco on every inject so the Xigncode
-hook would catch the very first `initialize` call. That also killed any
-in-progress match the moment the user tapped **Connect**. The cold restart is
-now opt-in via `PIXEL_RESTART=1`; by default the agent just attaches to the
-running game. The in-agent hook still neuters all subsequent
-`initialize` / `getCookie2` / `OnHackDetected` calls.
+- The desktop はぐるま agent is injected into MilkChoco by a bundled,
+  ABI-matched `frida-inject --realm=emulated`.
+- A **Java.perform Xigncode bypass** runs at the top of the agent
+  (`XigncodeClientSystem.initialize` wrapped with a fake callback,
+  `getCookie2` routed through, `OnHackDetected` neutered).
+- An in-process HTTP/SSE server (`src/server.js`) shadows Frida `send()` /
+  `recv()` so the WebView panel talks to the agent with no Node/Electron.
 
 ## Known caveats
 

@@ -1,13 +1,14 @@
-# Pixel — standalone MilkChoco APK (rooted environment required)
+# はぐるま — standalone MilkChoco APK (rooted environment required)
 
-A single installable APK that runs the **`pixel.exe` Frida agent** against
-MilkChoco (`com.gameparadiso.milkchoco`) on a **rooted phone** — no
-GameGuardian, no PC, no ADB, no terminal. The panel is intentionally aim-only:
-**aimbot, aim-assist, aim-by-circle, no-recoil, no-spread**, plus
-**slot kicker** and **teleport**.
+A single installable APK that runs the **desktop `haguruma.exe` Frida agent**
+against MilkChoco (`com.gameparadiso.milkchoco`) on a **rooted phone** — no
+GameGuardian, no PC, no ADB, no terminal. It mirrors the desktop build's login
+(operator ID + password), operation, UI and **Workshop** design. The phone
+panel exposes the mobile-usable cheats: **aimbot, aim-assist, aim-by-circle,
+no-recoil, no-spread**, plus **slot kicker** and **teleport**.
 
 ```
-   Install Pixel.apk
+   Install haguruma.apk
         │
         ▼  open the app
    ┌──────────────┐   login (real auth)   ┌──────────────┐   tap Connect (root)
@@ -16,12 +17,12 @@ GameGuardian, no PC, no ADB, no terminal. The panel is intentionally aim-only:
                                                                               ▼
    phone WebView  ◄───── http://127.0.0.1:27345 ◄──── in-process HTTP/SSE server (src/server.js)
         ▲                  aim-only control panel       shadows Frida send()/recv()
-        └──────────── pixel.exe agent (agent/agent.ts) injected by frida-inject --realm=emulated
+        └──────────── haguruma.exe agent (agent/agent.ts) injected by frida-inject --realm=emulated
 ```
 
 ## How it works
 
-This is the desktop **`pixel.exe`** agent, configured for phone use:
+This is the desktop **`haguruma.exe`** agent, configured for phone use:
 
 - `agent/` (the Frida agent) is injected into MilkChoco by a bundled,
   ABI-matched `frida-inject`. It does all the memory work.
@@ -69,10 +70,10 @@ build's panel. Saved keybinds / configs for them still survive in
 
 ## Use it
 
-1. Get `Pixel.apk` from a GitHub release (preferred) or the `apk` artifact on
+1. Get `haguruma.apk` from a GitHub release (preferred) or the `apk` artifact on
    GitHub Actions.
 2. Install it on the **rooted** phone (MilkChoco already installed).
-3. Open **Pixel** → log in with your key → tap **Connect to MilkChoco** →
+3. Open **はぐるま** → log in with your key → tap **Connect to MilkChoco** →
    grant the root (`su`) prompt. The aim panel loads once injection finishes.
 
 Optional environment knobs (set before launching the in-app injector, or when
@@ -85,7 +86,7 @@ running `launch.sh` from a shell):
 
 ## Build
 
-CI does it all — push and the `apk` job builds `Pixel.apk` (`npm run build`
+CI does it all — push and the `apk` job builds `haguruma.apk` (`npm run build`
 produces `dist/agent.js` + `bin/frida-inject-*`, which the Gradle
 `copyPixelAssets` task bundles into the APK; then `gradle assembleDebug`).
 Tag with `v*` (e.g. `v1.56.0`) or include `[release]` in the commit message
@@ -97,13 +98,13 @@ Locally (agent only; the APK needs the Android SDK and is best built in CI):
 npm install && npm run build      # -> dist/agent.js + per-ABI bin/frida-inject
 ```
 
-A `dist/pixel-mobile-<abi>.zip` + `launch.sh` manual-injection bundle is also
+A `dist/haguruma-mobile-<abi>.zip` + `launch.sh` manual-injection bundle is also
 produced for use without the APK (drop on phone, `su sh launch.sh`).
 
 ## Layout
 
 ```
-agent/                  pixel.exe Frida agent (+ offsets, types)
+agent/                  haguruma.exe Frida agent (+ offsets, types)
   agent.ts              Xigncode bypass (Java.perform) + aim/cheat handlers
   offsets.ts            libMyGame.so symbol table + xa-patch magic values
 web-src/                renderer (aim-only panel + 4-language UI)
@@ -115,7 +116,7 @@ app/                    the installable APK (login + connect shell -> panel)
       MainActivity.kt   branded login -> connect shell, then loads the panel
       Bridge.kt         native real-auth POST + connect trigger
       Injector.kt       root su -> push agent + frida-inject --realm=emulated
-  app/src/main/res/     adaptive launcher icon (from the pixel logo), strings
+  app/src/main/res/     adaptive launcher icon (twin-gear はぐるま logo), strings
 legacy/                 the old GameGuardian tool (Lua + MCO-Remote.apk), kept for reference
 RELEASE_NOTES.md        body for the next tagged GitHub release
 ```
