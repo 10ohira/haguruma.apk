@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.pixel.mobile'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.pixel.mobile'
+        minSdk 26
+        targetSdk 34
+        versionCode 156
+        versionName '1.56.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+}
+
+// Bundle the injectable agent + ARM frida-inject (produced by the repo-root
+// `npm run build`: dist/agent.js + bin/frida-inject-*) into the APK assets so a
+// single install is self-contained. Injector.kt extracts the ABI match. Only
+// the ARM binaries are bundled (every real phone is arm/arm64; x86/x86_64 are
+// emulator-only and would bloat the APK by ~170 MB).
+def pixelAssets = file("$projectDir/src/main/assets")
+def pixelAgent = file("$rootDir/../dist/agent.js")
+def pixelBin = file("$rootDir/../bin")
+
+tasks.register('copyPixelAssets', Copy) {
+    doFirst {
+        if (!pixelAgent.exists())
+            throw new GradleException("missing dist/agent.js — run `npm run build` at the repo root first")
+    }
+    into pixelAssets
+    from(pixelAgent)
+    from(pixelBin) { include 'frida-inject-*-android-arm', 'frida-inject-*-android-arm64' }
+}
+tasks.named('preBuild') { dependsOn 'copyPixelAssets' }

@@ -1,0 +1,5 @@
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- カラーなど必要に応じて追加 -->
+    </style>
+</resources>

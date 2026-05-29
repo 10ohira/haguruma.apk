@@ -1,0 +1,90 @@
+name: Build Pixel
+
+on:
+  push:
+    branches: [main, master, claude/lua-tool-standalone-Erpd2]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  # The single installable deliverable: Pixel.apk (login -> connect -> panel).
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build agent + fetch frida-inject (bundled into the APK)
+        run: npm install && npm run build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        working-directory: app
+        run: gradle --no-daemon assembleDebug
+      - name: Rename APK
+        run: cp app/app/build/outputs/apk/debug/app-debug.apk Pixel.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixel-apk
+          path: Pixel.apk
+
+  # Manual fallback: the injectable agent + per-ABI zips (frida-inject + launch.sh).
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixel-bundle
+          path: |
+            dist/agent.js
+            dist/*.zip
+
+  release:
+    needs: [apk, bundle]
+    if: startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Resolve release tag from package.json
+        id: ver
+        run: |
+          # When triggered by a "[release]" commit (not a v* tag push), the
+          # tag name comes from package.json so we don't need push-tag perms
+          # to cut a versioned release. Tag pushes still win when present.
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            V=$(node -p "require('./package.json').version")
+            TAG="v${V}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release tag resolved to: ${TAG}"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Pixel ${{ steps.ver.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            artifacts/**/Pixel.apk
+            artifacts/**/*.zip
+            artifacts/**/agent.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

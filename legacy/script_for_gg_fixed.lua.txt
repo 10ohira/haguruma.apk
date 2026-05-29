@@ -1,0 +1,1012 @@
+local OFFSETS = {
+    ["Z"]            = 0x198,
+    ["Y"]            = 0x19C,
+    ["X"]            = 0x1A0,
+    ["Z speed"]      = 0x108,
+    ["Y speed"]      = 0x13C,
+    ["X speed"]      = 0x104,
+    ["main speed"]   = 0x0F0,
+    ["sub speed"]    = 0x0F4,
+    ["inf skill G"]  = 0x135,
+    ["respawn"]      = 0x0E8,
+    ["rp system"]    = 0x02C,
+    ["timer"]        = 0x0D0,
+    ["script sys"]   = 0x134,
+    ["cooldown 0"]   = 0x0B5,
+    ["hook"]         = 0x174,
+    ["hide"]         = 0x1B8,
+    ["Delete sys"]   = 0x000,
+    ["check"]        = 0x1D4
+}
+
+local realKeyData = {
+  [1]={z={261.2665,-256.5806,261.2665,-256.5806,261.2665,-256.5806,261.2665,-256.5806}, x={71.68717,0.10532,44.69466,0.10532,-44.18560,0.10532,-71.52375,0.10532}, y={48.21943365,48.21943365,48.21943365,48.21943365,48.21943365,48.21943365,48.21943365,48.21943365}},
+  [2]={z={-261.2665,256.5806,-261.2665,256.5806,-261.2665,256.5806,-261.2665,256.5806}, x={71.68717,0.10532,44.69466,0.10532,-44.18560,0.10532,-71.52375,0.10532}, y={48.21943365,48.21943365,48.21943365,48.21943365,48.21943365,48.21943365,48.21943365,48.21943365}},
+  [3]={z={175.71618,-200.07823,208.81658,-200.07823,175.71618,-200.07823,208.81658,-200.07823}, x={-144.57347,128.38220,-111.58444,128.38220,-111.58444,128.38220,-144.57347,128.38220}, y={38.3997101,38.4000153,38.3997101,38.4000153,38.3997101,38.4000153,38.3997101,38.4000153}},
+  [4]={z={-175.71618,200.07823,-208.81658,200.07823,-175.71618,200.07823,-208.81658,200.07823}, x={144.57347,-128.38220,111.58444,-128.38220,111.58444,-128.38220,144.57347,-128.38220}, y={38.4000153,38.3997101,38.4000153,38.3997101,38.4000153,38.3997101,38.4000153,38.3997101}},
+  [5]={z={242.23381,-250.27249,242.23381,-250.27249,242.23381,-250.27249,242.23381,-250.27249}, x={60.50044,-0.42039,37.09999,-0.42039,-37.09999,-0.42039,-60.50044,-0.42039}, y={19.2000463,54.3999939,19.2000463,54.3999939,19.2000463,54.3999939,19.2000463,54.3999939}},
+  [6]={z={-242.23381,250.27249,-242.23381,250.27249,-242.23381,250.27249,-242.23381,250.27249}, x={60.50044,-0.42039,37.09999,-0.42039,-37.09999,-0.42039,-60.50044,-0.42039}, y={19.2000463,54.3999939,19.2000463,54.3999939,19.2000463,54.3999939,19.2000463,54.3999939}},
+  [7]={z={161.88835,-169.05087,161.88835,-169.05087,161.88835,-169.05087,161.88835,-169.05087}, x={158.02603,-124.86391,142.92604,-124.86391,105.92604,-124.86391,90.92604,-124.86391}, y={0.00002479,0.00001708,0.00002479,0.00001708,0.00002479,0.00001708,0.00002479,0.00001708}},
+  [8]={z={-161.88835,169.05087,-161.88835,169.05087,-161.88835,169.05087,-161.88835,169.05087}, x={-158.02603,124.86391,-142.92604,124.86391,-105.92604,124.86391,-90.92604,124.86391}, y={0.00001708984382,0.00002479553223,0.00001708984382,0.00002479553223,0.00001708984382,0.00002479553223,0.00001708984382,0.00002479553223}},
+}
+
+local userKeyMap = {
+    [1] = {even = {1}, odd = {2}},
+    [2] = {even = {3}, odd = {4}},
+    [3] = {even = {5}, odd = {6}},
+    [4] = {even = {7}, odd = {8}},
+}
+
+local scanRange = nil
+local rangeFailCount = 0
+local RANGE_FAIL_LIMIT = 5
+
+-- Toggle states
+local isShootEnabled = false
+local isReloadEnabled = false
+local isDamageUpEnabled = false
+local isRespawnEnabled = false
+local isSpeedEnabled = false
+local isBlackHoleEnabled = false
+local isAimBotEnabled = false
+local isAimAssistEnabled = false
+
+local speedMultiplier = 5.0
+local currentBaseAddr = nil
+
+-- Enemy player data
+local enemyPlayers = {}
+
+-- View angle addresses (cached)
+local yawAddress = nil
+local pitchAddress = nil
+
+-- Xa region reload & one-punch cache
+local xaReloadAddress = nil
+local xaOnePunchAddress = nil
+
+-- Aim assist settings
+local assistLockZonePos = 15
+local assistSmoothAimPos = 30
+
+local function getLockZone()
+    return 0.05 + (assistLockZonePos * 0.005)
+end
+
+local function getSmoothAim()
+    return 0.05 + (assistSmoothAimPos * 0.005)
+end
+
+-- Cached values
+local last_mago = nil
+local last_yspeed = nil
+
+-- Player ID (entered asynchronously later)
+local targetID = nil
+
+-- Self scan request flag
+local pendingSelfScan = false
+
+local EXPECTED_TARGET_PACKAGE = "com.gameparadiso.milkchoco"
+
+local function keepGameGuardianHidden()
+    pcall(function() gg.setVisible(false) end)
+    pcall(function() gg.hideUiButton() end)
+end
+keepGameGuardianHidden()
+
+local function ensureTargetSelected()
+    local ok, pkg = pcall(function() return gg.getTargetPackage() end)
+    if not ok then return true end
+    if pkg == nil then return true end
+    if pkg ~= EXPECTED_TARGET_PACKAGE then
+        gg.toast("Select target: " .. EXPECTED_TARGET_PACKAGE)
+        return false
+    end
+    return true
+end
+
+while not ensureTargetSelected() do
+    keepGameGuardianHidden()
+    gg.sleep(800)
+end
+
+-- Memory read/write helpers
+local function readByte(addr)
+    local r = gg.getValues({{address = addr, flags = gg.TYPE_DWORD}})
+    if r and r[1] then return r[1].value & 0xFF end
+    return nil
+end
+
+local function readDword(addr)
+    local r = gg.getValues({{address = addr, flags = gg.TYPE_DWORD}})
+    if r and r[1] then return r[1].value end
+    return nil
+end
+
+local function readFloat(addr)
+    local r = gg.getValues({{address = addr, flags = gg.TYPE_FLOAT}})
+    if r and r[1] then return r[1].value end
+    return nil
+end
+
+local function writeFloat(addr, val)
+    gg.setValues({{address = addr, flags = gg.TYPE_FLOAT, value = val}})
+end
+
+local function writeDword(addr, val)
+    gg.setValues({{address = addr, flags = gg.TYPE_DWORD, value = val}})
+end
+
+local function readString(addr, maxLen)
+    local str = ""
+    for i = 0, maxLen - 1, 4 do
+        local val = readDword(addr + i)
+        if not val then break end
+        for b = 0, 3 do
+            local byte = (val >> (b * 8)) & 0xFF
+            if byte == 0 then return str end
+            str = str .. string.char(byte)
+        end
+    end
+    return str
+end
+
+local function isValidID(id)
+    return id and (id >= 3000000 and id <= 35000000)
+end
+
+local function getDeltaAngle(target, current)
+    local diff = (target - current) % (2 * math.pi)
+    if diff > math.pi then
+        diff = diff - (2 * math.pi)
+    elseif diff < -math.pi then
+        diff = diff + (2 * math.pi)
+    end
+    return diff
+end
+
+-- Xa region (REGION_CODE_APP) scan logic
+local function setupXaAddresses()
+    if xaReloadAddress ~= nil and xaOnePunchAddress ~= nil then
+        return true
+    end
+
+    local ranges = gg.getRangesList("split_config.arm64_v8a.apk")
+
+    local mainXa = nil
+    local biggestSize = 0
+
+    for _, v in ipairs(ranges) do
+        if v.state == "Xa" then
+            local size = v["end"] - v.start
+
+            -- Use only the largest Xa region
+            if size > biggestSize and size > 0x100000 then
+                biggestSize = size
+                mainXa = v
+            end
+        end
+    end
+
+    if not mainXa then
+        return false
+    end
+
+    -- Restore saved offsets
+    xaReloadAddress   = mainXa.start + 0x2B1DD18
+    xaOnePunchAddress = mainXa.start + 0x2B1DD78
+
+    return true
+end
+
+-- Cross-reference logic
+local function setupViewAddresses()
+    if pitchAddress ~= nil and yawAddress ~= nil then
+        return true
+    end
+
+    local ranges = gg.getRangesList("split_config.arm64_v8a.apk:bss")
+
+    local mainBss = nil
+    local biggestSize = 0
+
+    for _, v in ipairs(ranges) do
+        local size = v["end"] - v.start
+
+        -- Skip small dummy bss regions
+        if size > biggestSize and size > 0x100000 then
+            biggestSize = size
+            mainBss = v
+        end
+    end
+
+    if not mainBss then
+        return false
+    end
+
+    -- Restore saved offsets
+    pitchAddress = mainBss.start + 0x9130D4
+    yawAddress   = mainBss.start + 0x9130D8
+
+    return true
+end
+
+-- Enemy scan logic
+local function scanAndFilterEnemies()
+    if not currentBaseAddr then return end
+    keepGameGuardianHidden()
+
+    local myBase = currentBaseAddr
+    local my1D5 = readByte(myBase + 0x1D5)
+    local my1F5 = readByte(myBase + 0x1F5) or 0
+    local my0C8 = readByte(myBase + 0x0C8) or 0
+    local myParity = my0C8 % 2
+
+    if not my1D5 then return end
+
+    gg.clearResults()
+    gg.setRanges(gg.REGION_OTHER)
+    
+    local searchMin = currentBaseAddr & 0xFFFF000000
+    local searchMax = searchMin + 0xFFFFFF
+    gg.searchNumber("3000000~35000000", gg.TYPE_DWORD, false, gg.SIGN_EQUAL, searchMin, searchMax)
+
+    local count = gg.getResultsCount()
+    if count == 0 then
+        gg.clearResults()
+        return
+    end
+
+    local results = gg.getResults(count)
+    local candidates = {}
+
+    for _, v in ipairs(results) do
+        local addr = v.address
+        if addr % 16 == 0 and addr ~= myBase then
+            local idVal = v.value
+            local ySpeed = readDword(addr + 0x13C)
+            local timerVal = readDword(addr + 0x0D0)
+
+            if idVal and ySpeed and timerVal then
+                table.insert(candidates, {
+                    base = addr,
+                    val = idVal,
+                    val1 = ySpeed,
+                    val2 = timerVal
+                })
+            end
+        end
+    end
+
+    gg.clearResults()
+
+    if #candidates == 0 then return end
+    gg.sleep(300)
+
+    local filtered = {}
+    for _, e in ipairs(candidates) do
+        local nv = readDword(e.base)
+        local nv1 = readDword(e.base + 0x13C)
+        local nv2 = readDword(e.base + 0x0D0)
+
+        if nv and nv == e.val and nv1 and nv2 then
+            if not (e.val1 == nv1 and e.val2 == nv2) then
+                local en1D5 = readByte(e.base + 0x1D5)
+                local en1F5 = readByte(e.base + 0x1F5)
+
+                if en1D5 == my1D5 and en1F5 == my1F5 then
+                    table.insert(filtered, {base = e.base, id = nv})
+                end
+            end
+        end
+    end
+
+    enemyPlayers = {}
+
+    for _, e in ipairs(filtered) do
+        if isValidID(e.id) then
+            local enemy0C8 = readByte(e.base + 0x0C8) or 0
+            local enemyParity = enemy0C8 % 2
+
+            if myParity ~= enemyParity then
+                local enemyName = readString(e.base + 0x090, 100)
+                if enemyName == "" then enemyName = "Unknown" end
+
+                table.insert(enemyPlayers, {
+                    base = e.base,
+                    id = e.id,
+                    name = enemyName
+                })
+            end
+        end
+    end
+
+    gg.toast("🔄 Enemy Scanned\nEnemies Found: " .. #enemyPlayers)
+    
+    keepGameGuardianHidden()
+    last_mago   = nil
+    last_yspeed = nil
+
+    setupViewAddresses()
+end
+
+local function exitScriptAndShowLogs()
+    local logMsg = "[ Scanned Enemy Log ]\n------------------------------\n"
+    if #enemyPlayers == 0 then
+        logMsg = logMsg .. "No enemies found.\n"
+    else
+        for i, enemy in ipairs(enemyPlayers) do
+            logMsg = logMsg .. string.format("[%d] Name: %s\n     ID: %d\n     Base: 0x%X\n\n", i, enemy.name, enemy.id, enemy.base)
+        end
+    end
+    logMsg = logMsg .. "------------------------------\nExiting script."
+    
+    gg.alert(logMsg)
+    gg.clearList()
+    os.exit()
+end
+
+local function runAdvancedCombatFeatures(baseAddr)
+    local mago   = readFloat(baseAddr + OFFSETS["timer"])
+    local yspeed = readFloat(baseAddr + OFFSETS["Y speed"])
+    local z = readFloat(baseAddr + OFFSETS["Z"])
+    local y = readFloat(baseAddr + OFFSETS["Y"])
+    local x = readFloat(baseAddr + OFFSETS["X"])
+    
+    if not (z and y and x) then return end
+
+    if isBlackHoleEnabled then
+        local bhChanged = (mago ~= last_mago) or (yspeed ~= last_yspeed)
+        if bhChanged then
+            local bx, by, bz = x, y, z
+            if yawAddress and pitchAddress then
+                local yaw   = readFloat(yawAddress)
+                local pitch = readFloat(pitchAddress)
+                if yaw and pitch then
+                    local r = 6
+                    local dx = r * math.cos(pitch) * math.cos(yaw)
+                    local dy = r * math.sin(pitch)
+                    local dz = r * math.cos(pitch) * math.sin(yaw)
+                    bx = bx + dx; by = by + dy + 3; bz = bz + dz
+                end
+            end
+            if bx == bx and by == by and bz == bz and not (bx == 0 and by == 0 and bz == 0) then
+                for _, enemy in ipairs(enemyPlayers) do
+                    local enemyBase = enemy.base
+                    local rv = gg.getValues({{address = enemyBase + OFFSETS["rp system"], flags = gg.TYPE_WORD}})
+                    local rpv = rv and rv[1] and rv[1].value
+                    if rpv then
+                        if rpv >= 32768 then rpv = rpv - 65536 end
+                        if rpv > 0 then
+                            writeFloat(enemyBase + 0x198, bz)
+                            writeFloat(enemyBase + 0x19C, by)
+                            writeFloat(enemyBase + 0x1A0, bx)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local aliveEnemies = {}
+    for _, enemy in ipairs(enemyPlayers) do
+        local enemyBase = enemy.base
+        local r = gg.getValues({{address = enemyBase + OFFSETS["rp system"], flags = gg.TYPE_WORD}})
+        local v = r and r[1] and r[1].value
+        if v then
+            if v >= 32768 then v = v - 65536 end
+            if v > 0 then
+                table.insert(aliveEnemies, enemyBase)
+            end
+        end
+    end
+
+    local curYaw, curPitch
+    if yawAddress and pitchAddress then
+        curYaw = readFloat(yawAddress); curPitch = readFloat(pitchAddress)
+    end
+
+    if isAimBotEnabled and yawAddress and pitchAddress then
+        local best = math.huge
+        local ty, tp
+        for _, base in ipairs(aliveEnemies) do
+            local tx  = readFloat(base + 0x1A0)
+            local tyt = readFloat(base + 0x19C)
+            local tz  = readFloat(base + 0x198)
+            if tx and tyt and tz then
+                local dx = tz - z
+                local dy = tyt - y - 4
+                local dz = tx - x
+                local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                if dist < best then
+                    best = dist
+                    ty = math.atan2(dx, dz)
+                    tp = math.atan2(dy, math.sqrt(dx*dx + dz*dz))
+                end
+            end
+        end
+        if ty and tp then
+            writeFloat(yawAddress,   ty)
+            writeFloat(pitchAddress, tp)
+        end
+    end
+
+    if isAimAssistEnabled and yawAddress and pitchAddress and curYaw and curPitch then
+        local best = math.huge
+        local diffY, diffP
+        for _, base in ipairs(aliveEnemies) do
+            local tx  = readFloat(base + 0x1A0)
+            local tyt = readFloat(base + 0x19C)
+            local tz  = readFloat(base + 0x198)
+            if tx and tyt and tz then
+                local dx = tz - z
+                local dy = tyt - y - 4
+                local dz = tx - x
+                
+                local ey = math.atan2(dx, dz)
+                local ep = math.atan2(dy, math.sqrt(dx*dx + dz*dz))
+                
+                local dyaw   = getDeltaAngle(ey, curYaw)
+                local dpitch = getDeltaAngle(ep, curPitch)
+                local totalDiff = math.abs(dyaw) + math.abs(dpitch)
+                
+                if totalDiff < best and totalDiff < getLockZone() then
+                    best = totalDiff
+                    diffY = dyaw
+                    diffP = dpitch
+                end
+            end
+        end
+        if diffY and diffP then
+            local f = getSmoothAim()
+            writeFloat(yawAddress,   curYaw   + (diffY * f))
+            writeFloat(pitchAddress, curPitch + (diffP * f))
+        end
+    end
+
+    last_mago = mago
+    last_yspeed = yspeed
+end
+
+local function updateXaCodes()
+    if not setupXaAddresses() then return end
+
+    if isReloadEnabled then
+        writeDword(xaReloadAddress, 505925632)
+    else
+        writeDword(xaReloadAddress, -1136562176)
+    end
+
+    if isDamageUpEnabled then
+        writeDword(xaOnePunchAddress, 505925632)
+    else
+        writeDword(xaOnePunchAddress, 506335232)
+    end
+end
+
+local function getDeleteSysC0(baseAddr)
+    local delSys = baseAddr + OFFSETS["Delete sys"]
+    if delSys then return delSys + 0x0C8 end
+    return nil
+end
+
+local function getDataForUserSelection(num, baseAddr)
+    local a = getDeleteSysC0(baseAddr)
+    if not a then return {} end
+    local v = readByte(a)
+    if not v then return {} end
+    
+    local mode = (v % 2 == 1) and "odd" or "even"
+    local indices = userKeyMap[num] and userKeyMap[num][mode]
+    if not indices then return {} end
+    
+    local ds = {}
+    for i, idx in ipairs(indices) do ds[i] = realKeyData[idx] end
+    return ds
+end
+
+local function executeCaptureSequence(num, baseAddr)
+    if not baseAddr then return end
+    local ds = getDataForUserSelection(num, baseAddr)
+    
+    for _, data in ipairs(ds) do
+        gg.setValues({{address = baseAddr + OFFSETS["script sys"], flags = gg.TYPE_DWORD, value = 1}})
+        for i = 1, #data.z do
+            local valuesToSet = {}
+            if OFFSETS["Z"] then table.insert(valuesToSet, {address = baseAddr + OFFSETS["Z"], flags = gg.TYPE_FLOAT, value = data.z[i]}) end
+            if OFFSETS["X"] then table.insert(valuesToSet, {address = baseAddr + OFFSETS["X"], flags = gg.TYPE_FLOAT, value = data.x[i]}) end
+            if OFFSETS["Y"] then table.insert(valuesToSet, {address = baseAddr + OFFSETS["Y"], flags = gg.TYPE_FLOAT, value = data.y[i]}) end
+            
+            gg.setValues(valuesToSet)
+            if i % 2 == 1 then gg.sleep(200) else gg.sleep(400) end
+        end
+    end
+end
+
+local function showCaptureSubMenu()
+    if not currentBaseAddr then
+        gg.toast("❌ Error: Target address has not been scanned yet")
+        return
+    end
+
+    local subMenu = gg.choice({
+        "1️⃣ Capture 1",
+        "2️⃣ Capture 2",
+        "3️⃣ Capture 3",
+        "4️⃣ Capture 4",
+        "↩️ Back"
+    }, nil, "Select a Capture number to execute")
+    
+    if subMenu == nil then return end
+    if subMenu >= 1 and subMenu <= 4 then
+        gg.toast("🍼 Starting Capture " .. subMenu .. "...")
+        executeCaptureSequence(subMenu, currentBaseAddr)
+        gg.toast("✅ Capture " .. subMenu .. " complete")
+    end
+end
+
+local function showSpeedSettings()
+    local spdInput = gg.prompt({"Set Speed Multiplier (1 - 15):"}, {tostring(speedMultiplier)}, {"number"})
+    if spdInput == nil then return end
+    
+    local val = tonumber(spdInput[1])
+    if val and val >= 1 and val <= 15 then
+        speedMultiplier = val
+        gg.toast("🏃‍♂️ Speed multiplier set to: " .. speedMultiplier .. "x")
+    else
+        gg.toast("❌ Invalid value!")
+    end
+end
+
+local function showAimAssistSettings()
+    local input = gg.prompt({
+        "🔒 Lock Zone pos (1~100)  value = 0.05 + pos×0.005  narrow=1(0.055) wide=100(0.55)",
+        "⚡ Smooth Aim pos (1~100)  value = 0.05 + pos×0.005  slow=1(0.055) fast=100(0.55)"
+    }, {
+        tostring(assistLockZonePos),
+        tostring(assistSmoothAimPos)
+    }, {
+        "number",
+        "number"
+    })
+    
+    if input == nil then return end
+    
+    local zp = tonumber(input[1])
+    local sp = tonumber(input[2])
+    
+    if zp and zp >= 1 and zp <= 100 then
+        assistLockZonePos = math.floor(zp)
+    end
+    if sp and sp >= 1 and sp <= 100 then
+        assistSmoothAimPos = math.floor(sp)
+    end
+    
+    gg.toast(string.format("⚙️ Settings updated: Lock Zone: %.3f (pos=%d) | Smooth: %.3f (pos=%d)",
+        getLockZone(), assistLockZonePos, getSmoothAim(), assistSmoothAimPos))
+end
+
+local function showMenu()
+    while true do
+        local txtShoot      = (isShootEnabled      and "🟢 [ON] 🔫 Shoot"        or "⚪ [OFF] 🔫 Shoot")
+        local txtReload     = (isReloadEnabled     and "🟢 [ON] ♻️ Reload 0"     or "⚪ [OFF] ♻️ Reload 0")
+        local txtDamageUp   = (isDamageUpEnabled   and "🟢 [ON] 💥 Damage up"    or "⚪ [OFF] 💥 Damage up")
+        local txtRespawn    = (isRespawnEnabled    and "🟢 [ON] ❤️‍🔥 Respawn"      or "⚪ [OFF] ❤️‍🔥 Respawn")
+        local txtSpeed      = (isSpeedEnabled      and "🟢 [ON] 🏃‍♂️ Speed ("..speedMultiplier.."x)" or "⚪ [OFF] 🏃‍♂️ Speed ("..speedMultiplier.."x)")
+        local txtBlackHole  = (isBlackHoleEnabled  and "🟢 [ON] 🕳️ Black Hole"   or "⚪ [OFF] 🕳️ Black Hole")
+        local txtAimBot     = (isAimBotEnabled     and "🟢 [ON] 🎯 Aim Bot"      or "⚪ [OFF] 🎯 Aim Bot")
+        local txtAimAssist  = (isAimAssistEnabled  and "🟢 [ON] 🛡️ Aim Assist"   or "⚪ [OFF] 🛡️ Aim Assist")
+
+        local menu = gg.choice({
+            "Tap the GG icon to open this menu",
+            txtShoot,
+            txtReload,
+            txtDamageUp,
+            txtRespawn,
+            txtSpeed,
+            txtBlackHole,
+            txtAimBot,
+            txtAimAssist,
+            "🔍 Scan Enemies",
+            "⚙️ Speed Settings",
+            "🔧 Aim Settings",
+            "🍼 Capture (1-4)",
+            "❌ Close menu",
+            "🛑 Exit script"
+        }, nil)
+        
+        if menu == nil or menu == 14 then 
+            break
+        elseif menu == 2 then isShootEnabled = not isShootEnabled
+        elseif menu == 3 then 
+            isReloadEnabled = not isReloadEnabled
+            updateXaCodes()
+        elseif menu == 4 then 
+            isDamageUpEnabled = not isDamageUpEnabled
+            updateXaCodes()
+        elseif menu == 5 then isRespawnEnabled = not isRespawnEnabled
+        elseif menu == 6 then isSpeedEnabled = not isSpeedEnabled
+        elseif menu == 7 then isBlackHoleEnabled = not isBlackHoleEnabled
+        elseif menu == 8 then isAimBotEnabled = not isAimBotEnabled
+        elseif menu == 9 then isAimAssistEnabled = not isAimAssistEnabled
+        elseif menu == 10 then scanAndFilterEnemies()
+        elseif menu == 11 then showSpeedSettings()
+        elseif menu == 12 then showAimAssistSettings()
+        elseif menu == 13 then showCaptureSubMenu()
+        elseif menu == 15 then
+            exitScriptAndShowLogs()
+        end
+    end
+end
+
+-- ====================================================================
+-- External UI bridge
+-- Reads commands written by the MCO Remote APK.
+-- ====================================================================
+local uiBridgeLastSeq = -1
+local uiBridgeLastToast = 0
+local uiBridgeMissingToast = 0
+local UI_BRIDGE_PATHS = {
+    "/sdcard/Download/MCO_GG_command.json",
+    "/storage/emulated/0/Download/MCO_GG_command.json"
+}
+
+local function uiReadAllText()
+    for _, path in ipairs(UI_BRIDGE_PATHS) do
+        local f = io.open(path, "r")
+        if f then
+            local text = f:read("*a")
+            f:close()
+            return text
+        end
+    end
+    return nil
+end
+
+local function uiJsonBool(text, key)
+    local v = text:match('"' .. key .. '"%s*:%s*(true)')
+    if v == "true" then return true end
+    v = text:match('"' .. key .. '"%s*:%s*(false)')
+    if v == "false" then return false end
+    return nil
+end
+
+local function uiJsonNumber(text, key)
+    local v = text:match('"' .. key .. '"%s*:%s*([%-%.%d]+)')
+    if v then return tonumber(v) end
+    return nil
+end
+
+local function uiJsonString(text, key)
+    return text:match('"' .. key .. '"%s*:%s*"([^"]*)"')
+end
+
+local function uiApplyBool(text, key, current)
+    local v = uiJsonBool(text, key)
+    if v == nil then return current end
+    return v
+end
+
+local function applyUiBridgeCommand()
+    keepGameGuardianHidden()
+    local text = uiReadAllText()
+    if not text or text == "" then
+        local now = os.time()
+        if now - uiBridgeMissingToast >= 15 then
+            uiBridgeMissingToast = now
+            gg.toast("MCO Remote waiting: command file not found")
+        end
+        return
+    end
+
+    local seq = uiJsonNumber(text, "commandSeq")
+    if seq == nil or seq == uiBridgeLastSeq then return end
+    uiBridgeLastSeq = seq
+
+    local id = uiJsonNumber(text, "userId")
+    if id and id > 0 and targetID ~= id then
+        targetID = id
+        currentBaseAddr = nil
+        scanRange = nil
+        enemyPlayers = {}
+    end
+
+    local oldReload = isReloadEnabled
+    local oldDamage = isDamageUpEnabled
+
+    isShootEnabled = uiApplyBool(text, "shoot", isShootEnabled)
+    isReloadEnabled = uiApplyBool(text, "reload", isReloadEnabled)
+    isDamageUpEnabled = uiApplyBool(text, "damageUp", isDamageUpEnabled)
+    isRespawnEnabled = uiApplyBool(text, "respawn", isRespawnEnabled)
+    isSpeedEnabled = uiApplyBool(text, "speed", isSpeedEnabled)
+    isBlackHoleEnabled = uiApplyBool(text, "blackHole", isBlackHoleEnabled)
+    isAimBotEnabled = uiApplyBool(text, "aimBot", isAimBotEnabled)
+    isAimAssistEnabled = uiApplyBool(text, "aimAssist", isAimAssistEnabled)
+    if isAimAssistEnabled then
+        isAimBotEnabled = false
+        isBlackHoleEnabled = false
+    elseif isAimBotEnabled then
+        isBlackHoleEnabled = false
+    elseif isBlackHoleEnabled then
+        isAimBotEnabled = false
+        isAimAssistEnabled = false
+    end
+
+    local spd = uiJsonNumber(text, "speedMultiplier")
+    if spd and spd >= 1 and spd <= 15 then speedMultiplier = spd end
+
+    local lock = uiJsonNumber(text, "lockZonePos")
+    if lock and lock >= 1 and lock <= 100 then assistLockZonePos = math.floor(lock) end
+
+    local smooth = uiJsonNumber(text, "smoothAimPos")
+    if smooth and smooth >= 1 and smooth <= 100 then assistSmoothAimPos = math.floor(smooth) end
+
+    if oldReload ~= isReloadEnabled or oldDamage ~= isDamageUpEnabled then
+        updateXaCodes()
+    end
+
+    local action = uiJsonString(text, "action")
+    if action == "selfScan" then
+        keepGameGuardianHidden()
+        pendingSelfScan = true
+        gg.toast("Self scan requested")
+    elseif action == "scanEnemies" then
+        keepGameGuardianHidden()
+        scanAndFilterEnemies()
+    elseif action == "capture1" and currentBaseAddr then
+        keepGameGuardianHidden()
+        executeCaptureSequence(1, currentBaseAddr)
+    elseif action == "capture2" and currentBaseAddr then
+        keepGameGuardianHidden()
+        executeCaptureSequence(2, currentBaseAddr)
+    elseif action == "capture3" and currentBaseAddr then
+        keepGameGuardianHidden()
+        executeCaptureSequence(3, currentBaseAddr)
+    elseif action == "capture4" and currentBaseAddr then
+        keepGameGuardianHidden()
+        executeCaptureSequence(4, currentBaseAddr)
+    end
+
+    local now = os.time()
+    if now ~= uiBridgeLastToast then
+        uiBridgeLastToast = now
+        gg.toast("MCO Remote synced")
+    end
+end
+
+local function doScan()
+    gg.clearResults()
+    gg.setRanges(gg.REGION_OTHER)
+    if scanRange ~= nil then
+        gg.searchNumber(tostring(targetID), gg.TYPE_DWORD, false, gg.SIGN_EQUAL, scanRange.min, scanRange.max)
+    else
+        gg.searchNumber(tostring(targetID), gg.TYPE_DWORD, false, gg.SIGN_EQUAL)
+    end
+    local count = gg.getResultsCount()
+    if count == 0 then return {} end
+    local results = gg.getResults(count)
+    local aligned = {}
+    for _, v in ipairs(results) do
+        if v.address % 16 == 0 then table.insert(aligned, v.address) end
+    end
+    if #aligned == 0 then return {} end
+    local checkList = {}
+    for _, addr in ipairs(aligned) do
+        table.insert(checkList, {address = addr + OFFSETS["check"], flags = gg.TYPE_DWORD})
+    end
+    local checked = gg.getValues(checkList)
+    local realAddresses = {}
+    for i, r in ipairs(checked) do
+        if r.value ~= nil and (r.value & 0xFF) ~= 0 then
+            table.insert(realAddresses, aligned[i])
+        end
+    end
+    return realAddresses
+end
+
+local function runShootMode(baseAddr)
+    gg.setValues({
+        {address = baseAddr + OFFSETS["main speed"], flags = gg.TYPE_FLOAT, value = -1000.0},
+        {address = baseAddr + OFFSETS["sub speed"], flags = gg.TYPE_FLOAT, value = -1000.0},
+    })
+end
+
+local function runRespawnMode(baseAddr)
+    local targetAddr = baseAddr + OFFSETS["respawn"]
+    local v = readDword(targetAddr)
+    if v ~= nil then
+        if v ~= 0 and v ~= 1 then
+            gg.setValues({
+                {address = targetAddr, flags = gg.TYPE_DWORD, value = 1}
+            })
+        end
+    end
+end
+
+local function runSpeedMode(baseAddr)
+    local xSpeedAddr = baseAddr + OFFSETS["X speed"]
+    local zSpeedAddr = baseAddr + OFFSETS["Z speed"]
+    
+    local origX = readFloat(xSpeedAddr)
+    local origZ = readFloat(zSpeedAddr)
+    
+    if origX ~= nil and origZ ~= nil then
+        local inputX = origX
+        local inputZ = origZ
+        if math.abs(inputX) < 0.05 then inputX = 0 end
+        if math.abs(inputZ) < 0.05 then inputZ = 0 end
+        
+        if inputX ~= 0 or inputZ ~= 0 then
+            if math.abs(origX) <= (speedMultiplier + 1.0) and math.abs(origZ) <= (speedMultiplier + 1.0) then
+                local length = math.sqrt((inputX * inputX) + (inputZ * inputZ))
+                
+                if length > 0 then
+                    local dirX = inputX / length
+                    local dirZ = inputZ / length
+                    
+                    local targetX = dirX * speedMultiplier
+                    local targetZ = dirZ * speedMultiplier
+                    
+                    gg.setValues({
+                        {address = xSpeedAddr, flags = gg.TYPE_FLOAT, value = targetX},
+                        {address = zSpeedAddr, flags = gg.TYPE_FLOAT, value = targetZ}
+                    })
+                end
+            end
+        end
+    end
+end
+
+-- ====================================================================
+-- Background init: scan Xa and view angles while waiting for ID input
+-- ====================================================================
+
+-- Scan progress flags
+local scanProgress = {
+    xaDone = false,
+    viewDone = false
+}
+
+keepGameGuardianHidden()
+
+gg.toast("⚡ Script launched asynchronously. Starting background scan...")
+
+-- Init loop: run background scans while waiting for ID input
+while true do
+    -- Step a: scan Xa addresses if not done
+    if not scanProgress.xaDone then
+        gg.toast("🔍 [Background] Scanning Xa region (reload/one-punch)...")
+        keepGameGuardianHidden()
+        setupXaAddresses()
+        scanProgress.xaDone = true
+    end
+
+    -- Step b: scan view base addresses if not done
+    if not scanProgress.viewDone then
+        gg.toast("🔍 [Background] Scanning view base (Yaw/Pitch)...")
+        keepGameGuardianHidden()
+        setupViewAddresses()
+        scanProgress.viewDone = true
+    end
+
+    -- Step c: both scans done, show ID input
+    if scanProgress.xaDone and scanProgress.viewDone then
+        gg.toast("Set your ID in MCO Remote")
+        while not targetID do
+            keepGameGuardianHidden()
+            applyUiBridgeCommand()
+            if targetID then break end
+            gg.sleep(500)
+        end
+        break
+    end
+    gg.sleep(100)
+end
+
+-- MCO Remote APK is now the main UI. Do not open the old GG menu here.
+gg.toast("MCO Remote bridge ready")
+keepGameGuardianHidden()
+
+-- ====================================================================
+-- Main loop
+-- ====================================================================
+while true do
+    keepGameGuardianHidden()
+    if not ensureTargetSelected() then
+        gg.sleep(800)
+        goto continue_main
+    end
+    applyUiBridgeCommand()
+    local found = doScan()
+    if pendingSelfScan then
+        pendingSelfScan = false
+        currentBaseAddr = nil
+        rangeFailCount = 0
+        enemyPlayers = {}
+        gg.toast("Self scan starting...")
+        gg.sleep(100)
+        goto continue_main
+    end
+
+    if #found == 0 then
+        currentBaseAddr = nil
+        enemyPlayers = {}
+        if scanRange ~= nil then
+            rangeFailCount = rangeFailCount + 1
+            if rangeFailCount >= RANGE_FAIL_LIMIT then
+                gg.toast("Address lost (Rescanning full range)")
+                scanRange = nil
+                rangeFailCount = 0
+            else
+                gg.toast("No results (" .. rangeFailCount .. "/" .. RANGE_FAIL_LIMIT .. ")")
+            end
+        else
+            gg.toast("No results → retrying in 1 second")
+        end
+        gg.sleep(1000)
+    else
+        local baseAddr = found[1]
+        
+        if currentBaseAddr ~= baseAddr then
+            currentBaseAddr = baseAddr
+            local newBase = baseAddr & 0xFFFF000000
+            scanRange = { min = newBase, max = newBase + 0xFFFFFF }
+            rangeFailCount = 0
+            enemyPlayers = {}
+            last_mago   = nil
+            last_yspeed = nil
+            scanAndFilterEnemies()
+        end
+
+        local checkAddr = baseAddr + OFFSETS["check"]
+        
+        while true do
+            keepGameGuardianHidden()
+            if not ensureTargetSelected() then
+                gg.sleep(800)
+                break
+            end
+            applyUiBridgeCommand()
+
+            -- 手動self scanリクエストがあれば即座にrescan
+            if pendingSelfScan then
+                pendingSelfScan = false
+                currentBaseAddr = nil
+                rangeFailCount = 0
+                enemyPlayers = {}
+                gg.toast("Self scan starting...")
+                break
+            end
+
+            local byteVal = readByte(checkAddr)
+            if byteVal == nil or byteVal == 0 then
+                gg.toast("⚠️ Address lost → switching to rescan")
+                currentBaseAddr = nil
+                enemyPlayers = {}
+                break
+            end
+
+            if gg.isVisible() then
+                keepGameGuardianHidden()
+                gg.toast("Use the MCO Remote floating menu")
+                gg.sleep(200)
+            end
+
+            if isShootEnabled then runShootMode(baseAddr) end
+            if isRespawnEnabled then runRespawnMode(baseAddr) end
+            if isSpeedEnabled then runSpeedMode(baseAddr) end
+
+            runAdvancedCombatFeatures(baseAddr)
+
+            if isSpeedEnabled then
+                gg.sleep(1)
+            elseif isAimAssistEnabled or isAimBotEnabled or isBlackHoleEnabled then
+                gg.sleep(10)
+            else
+                gg.sleep(20)
+            end
+        end
+    end
+    ::continue_main::
+end

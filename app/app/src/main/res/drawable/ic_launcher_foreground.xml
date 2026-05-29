@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from /home/user/pixel/public/icon.svg: the three gradient rects.
+     The 512-unit art is centered in a 776-unit viewport (132 margin each side)
+     so it lands inside the adaptive-icon safe zone. fillAlpha 0.8 == SVG opacity .8. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="776"
+    android:viewportHeight="776">
+
+    <!-- cyan -->
+    <path
+        android:pathData="M188.79,184.38 L439.73,184.38 L439.73,435.32 L188.79,435.32 Z"
+        android:fillAlpha="0.8">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="188.79" android:startY="184.38"
+                android:endX="427.99" android:endY="423.59">
+                <item android:offset="0" android:color="#FFE7F4FF"/>
+                <item android:offset="0.51" android:color="#FF9AEDFF"/>
+                <item android:offset="1" android:color="#FF18CCFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- magenta -->
+    <path
+        android:pathData="M363.79,264 L596.39,264 L596.39,496.6 L363.79,496.6 Z"
+        android:fillAlpha="0.8">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="372.29" android:startY="272.5"
+                android:endX="594" android:endY="494.21">
+                <item android:offset="0" android:color="#FFF8EAFF"/>
+                <item android:offset="0.51" android:color="#FFEAABFF"/>
+                <item android:offset="1" android:color="#FFDE36FF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- gold -->
+    <path
+        android:pathData="M222.17,375.53 L447.43,375.53 L447.43,600.79 L222.17,600.79 Z"
+        android:fillAlpha="0.8">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="230.41" android:startY="383.76"
+                android:endX="445.13" android:endY="598.48">
+                <item android:offset="0" android:color="#FFFFF4EC"/>
+                <item android:offset="0.51" android:color="#FFFFEDA6"/>
+                <item android:offset="1" android:color="#FFFFCC31"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

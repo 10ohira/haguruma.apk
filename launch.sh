@@ -1,0 +1,97 @@
+#!/system/bin/sh
+# =============================================================================
+#  Pixel Mobile — on-device launcher (NO PC)
+#
+#  Runs ON the rooted phone (Termux as root, or `adb shell` then `su`).
+#  Injects mobile/dist/agent.js into MilkChoco using the bundled, ABI-matched
+#  frida-inject. The agent then serves the control panel at
+#  http://127.0.0.1:27345 — open it in the phone browser or the Pixel WebView
+#  app (mobile/app).
+#
+#  One-time placement (push these onto the phone, e.g. via your file manager,
+#  Termux, or `adb push` from any PC just once):
+#      WORK/agent.js                                   <- mobile/dist/agent.js
+#      WORK/frida-inject-17.9.10-android-<abi>         <- bin/frida-inject/...
+#  Default WORK = /data/local/tmp/pixel
+#
+#  Usage (as root):
+#      sh launch.sh            # attach if game running, else spawn it
+#      WORK=/sdcard/pixel sh launch.sh
+# =============================================================================
+set -e
+
+PKG="com.gameparadiso.milkchoco"
+VER="17.9.10"
+WORK="${WORK:-/data/local/tmp/pixel}"
+AGENT="$WORK/agent.js"
+
+if [ "$(id -u)" != "0" ]; then
+  echo "[pixel] must run as root (su). Aborting." >&2
+  exit 1
+fi
+
+# --- pick the frida-inject matching this device's ABI ---
+ABI="$(getprop ro.product.cpu.abi 2>/dev/null || true)"
+case "$ABI" in
+  arm64*)  A="arm64" ;;
+  armeabi*) A="arm" ;;
+  x86_64)  A="x86_64" ;;
+  x86)     A="x86" ;;
+  *)
+    M="$(uname -m 2>/dev/null || true)"
+    case "$M" in
+      aarch64) A="arm64" ;; armv7*|armv8*) A="arm" ;;
+      x86_64) A="x86_64" ;; i*86) A="x86" ;;
+      *) echo "[pixel] unknown ABI '$ABI'/'$M'." >&2; exit 1 ;;
+    esac
+esac
+INJECT="$WORK/frida-inject-$VER-android-$A"
+
+[ -f "$AGENT" ]  || { echo "[pixel] missing $AGENT" >&2; exit 1; }
+[ -f "$INJECT" ] || { echo "[pixel] missing $INJECT (need frida-inject for $A)" >&2; exit 1; }
+chmod 755 "$INJECT" 2>/dev/null || true
+
+# --- ensure the game is running, then attach by process name ---
+# Attach without killing — force-stopping disrupts the user's current
+# session for marginal Xigncode-bypass gain (the in-agent hook still
+# neuters future XigncodeClientSystem.initialize / getCookie2 calls).
+# For maximum bypass coverage, manually close the game before running
+# this script, or set PIXEL_RESTART=1 to opt in to a cold restart.
+PID="$(pidof "$PKG" 2>/dev/null || true)"
+if [ -n "$PID" ] && [ "${PIXEL_RESTART:-0}" = "1" ]; then
+  echo "[pixel] restarting $PKG (PIXEL_RESTART=1) ..."
+  am force-stop "$PKG" >/dev/null 2>&1 || kill -9 "$PID" 2>/dev/null || true
+  i=0
+  while [ -n "$PID" ] && [ $i -lt 10 ]; do
+    sleep 1; i=$((i+1)); PID="$(pidof "$PKG" 2>/dev/null || true)"
+  done
+fi
+if [ -z "$PID" ]; then
+  echo "[pixel] launching $PKG ..."
+  monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || \
+    am start -n "$PKG/com.unity3d.player.UnityPlayerActivity" >/dev/null 2>&1 || true
+  i=0
+  while [ -z "$PID" ] && [ $i -lt 30 ]; do
+    sleep 1; i=$((i+1)); PID="$(pidof "$PKG" 2>/dev/null || true)"
+  done
+  [ -n "$PID" ] || { echo "[pixel] game did not start." >&2; exit 1; }
+fi
+
+echo "[pixel] injecting into $PKG (pid $PID, abi $A)"
+echo "[pixel] panel will be at http://127.0.0.1:27345  (Ctrl+C to detach)"
+# --realm=emulated runs the agent inside Frida's Stalker-based emulator so its
+# JS context is invisible to Xigncode's anti-Frida scans. Every API the agent
+# uses (Java.perform, Module.findExportByName, NativeFunction, Interceptor,
+# Memory.protect/alloc, Socket.listen, setInterval) works in both realms, so
+# this is purely a defensive upgrade. Older frida-inject builds may not know
+# the flag — we probe --help and drop it silently if so. Set
+# PIXEL_REALM=native to force native realm.
+REALM="${PIXEL_REALM:-emulated}"
+REALM_OPT=""
+if "$INJECT" --help 2>&1 | grep -q -- "--realm"; then
+  REALM_OPT="--realm=$REALM"
+  echo "[pixel] frida realm: $REALM"
+else
+  echo "[pixel] frida realm: native (this frida-inject build has no --realm flag)"
+fi
+exec "$INJECT" -n "$PKG" -s "$AGENT" --runtime=qjs $REALM_OPT
