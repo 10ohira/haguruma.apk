@@ -5,3 +5,8 @@ dist/
 
 # bundled into the APK at build time (dist/agent.js + bin/frida-inject-*)
 app/app/src/main/assets/
+
+# local Android SDK path + Gradle build state (machine-specific)
+local.properties
+.gradle/
+app/.gradle/
