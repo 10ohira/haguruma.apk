@@ -79,19 +79,28 @@ fi
 
 echo "[pixel] injecting into $PKG (pid $PID, abi $A)"
 echo "[pixel] panel will be at http://127.0.0.1:27345  (Ctrl+C to detach)"
-# --realm=emulated runs the agent inside Frida's Stalker-based emulator so its
-# JS context is invisible to Xigncode's anti-Frida scans. Every API the agent
-# uses (Java.perform, Module.findExportByName, NativeFunction, Interceptor,
-# Memory.protect/alloc, Socket.listen, setInterval) works in both realms, so
-# this is purely a defensive upgrade. Older frida-inject builds may not know
-# the flag — we probe --help and drop it silently if so. Set
-# PIXEL_REALM=native to force native realm.
-REALM="${PIXEL_REALM:-emulated}"
+# Frida realm. Default is NATIVE: the agent does Java-level instrumentation
+# (the Xigncode bypass — Java.perform on XigncodeClientSystem.initialize), and
+# per Frida's own docs you "need to apply your Java-level instrumentation in
+# the native realm". The emulated realm is for ARM-on-x86 NativeBridge code
+# and cannot reach the Java VM, so injecting emulated silently skips the
+# anti-cheat bypass (the agent's try/catch swallows the failure). On a real
+# arm/arm64 phone there is no emulated realm to hide in anyway.
+# Set PIXEL_REALM=emulated only if you know it disables the Java/Xigncode
+# bypass and your build needs it for some other reason.
+REALM="${PIXEL_REALM:-native}"
 REALM_OPT=""
-if "$INJECT" --help 2>&1 | grep -q -- "--realm"; then
-  REALM_OPT="--realm=$REALM"
-  echo "[pixel] frida realm: $REALM"
+if [ "$REALM" = "emulated" ]; then
+  if "$INJECT" --help 2>&1 | grep -q -- "--realm"; then
+    REALM_OPT="--realm=emulated"
+    echo "[pixel] frida realm: emulated (WARNING: Java/Xigncode bypass is disabled in this realm)"
+  else
+    echo "[pixel] frida realm: native (this frida-inject build has no --realm flag)"
+  fi
 else
-  echo "[pixel] frida realm: native (this frida-inject build has no --realm flag)"
+  echo "[pixel] frida realm: native"
 fi
-exec "$INJECT" -n "$PKG" -s "$AGENT" --runtime=qjs $REALM_OPT
+# Attach to the resolved PID directly (-p). More reliable than name matching
+# (-n): the process cmdline can differ from the package and -n is ambiguous
+# when more than one match exists. We already resolved $PID above.
+exec "$INJECT" -p "$PID" -s "$AGENT" --runtime=qjs $REALM_OPT

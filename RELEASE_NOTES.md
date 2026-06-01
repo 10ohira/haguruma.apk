@@ -52,7 +52,9 @@ need a desktop-only system overlay or global keyboard hook:
 ### How it works
 
 - The desktop はぐるま agent is injected into MilkChoco by a bundled,
-  ABI-matched `frida-inject --realm=emulated`.
+  ABI-matched `frida-inject`, attaching to the game PID in the **native
+  realm** (required: the Xigncode bypass is Java instrumentation, which Frida
+  can only do from the native realm).
 - A **Java.perform Xigncode bypass** runs at the top of the agent
   (`XigncodeClientSystem.initialize` wrapped with a fake callback,
   `getCookie2` routed through, `OnHackDetected` neutered).

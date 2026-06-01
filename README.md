@@ -17,7 +17,7 @@ no-recoil, no-spread**, plus **slot kicker** and **teleport**.
                                                                               ▼
    phone WebView  ◄───── http://127.0.0.1:27345 ◄──── in-process HTTP/SSE server (src/server.js)
         ▲                  aim-only control panel       shadows Frida send()/recv()
-        └──────────── haguruma.exe agent (agent/agent.ts) injected by frida-inject --realm=emulated
+        └──────────── haguruma.exe agent (agent/agent.ts) injected by frida-inject (native realm, -p PID)
 ```
 
 ## How it works
@@ -29,10 +29,14 @@ This is the desktop **`haguruma.exe`** agent, configured for phone use:
 - A **Java.perform Xigncode bypass** runs at the top of the agent
   (`XigncodeClientSystem.initialize` is replaced with a fake-callback wrapper,
   `getCookie2` is routed through, `OnHackDetected` is neutered).
-- The injection runs with **`--realm=emulated`** by default, so the agent's
-  JS context lives inside Frida's Stalker-based emulator and is invisible to
-  Xigncode's anti-Frida memory/module scans. The launcher probes
-  `frida-inject --help` first and silently drops the flag on older builds.
+- The injection runs in the **native realm** (frida-inject's default), and
+  attaches to the resolved game **PID** (`-p`). Native is mandatory here: the
+  Xigncode bypass is *Java* instrumentation (`Java.perform`), and Frida can
+  only reach the Java VM from the native realm — [Frida's own docs](https://frida.re/news/2021/02/10/frida-14-2-released/)
+  state you "need to apply your Java-level instrumentation in the native
+  realm." The emulated realm exists for ARM-on-x86 NativeBridge code; using it
+  would silently skip the anti-cheat bypass (and a real arm/arm64 phone has no
+  emulated realm to hide in anyway).
 - `src/server.js` runs a tiny HTTP/SSE server **inside the game process** and
   shadows Frida's `send()`/`recv()`, so the renderer (`web-src/`) is served at
   `http://127.0.0.1:27345`. The APK loads that URL in a WebView.
@@ -81,7 +85,7 @@ running `launch.sh` from a shell):
 
 | Variable | Effect |
 |---|---|
-| `PIXEL_REALM=native` | Disable the emulated realm if it misbehaves on your device. |
+| `PIXEL_REALM=emulated` | Opt in to Frida's emulated realm (default is native). **Disables the Java/Xigncode bypass** — only for debugging on ARM-on-x86 NativeBridge setups. |
 | `PIXEL_RESTART=1` | Force-stop MilkChoco before attaching for the cleanest Xigncode bypass. Off by default so the inject button doesn't kill an in-progress match. |
 
 ## Build
@@ -115,7 +119,7 @@ app/                    the installable APK (login + connect shell -> panel)
   app/src/main/java/com/pixel/mobile/
       MainActivity.kt   branded login -> connect shell, then loads the panel
       Bridge.kt         native real-auth POST + connect trigger
-      Injector.kt       root su -> push agent + frida-inject --realm=emulated
+      Injector.kt       root su -> push agent + frida-inject -p PID (native realm)
   app/src/main/res/     adaptive launcher icon (twin-gear はぐるま logo), strings
 legacy/                 the old GameGuardian tool (Lua + MCO-Remote.apk), kept for reference
 RELEASE_NOTES.md        body for the next tagged GitHub release
@@ -131,7 +135,7 @@ escaping, aim-easing math.
 device:
 
 - On-device runtime (Frida `Socket`, `frida-inject` under root, SELinux
-  ptrace, `--realm=emulated` on the device's ABI).
+  ptrace, native-realm attach on the device's ABI).
 - The in-app `su` injection round trip and the real login.
 - The Gradle APK build itself (standard recipe, runs in CI — there is no
   Android SDK in the dev sandbox).

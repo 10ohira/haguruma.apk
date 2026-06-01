@@ -76,20 +76,28 @@ object Injector {
               done
             fi
             [ -n "${s}PID" ] || { echo PIXEL_NOGAME; exit 0; }
-            # --realm=emulated runs the agent inside Frida's Stalker-based
-            # emulator so its JS context is invisible to Xigncode's
-            # anti-Frida scans. Every API the agent uses works in both
-            # realms (audited line-by-line), so this is purely defensive.
-            # Older frida-inject builds may not know --realm; probe --help
-            # and drop the flag if so.
-            REALM_OPT=""
-            if "${s}WORK/frida-inject" --help 2>&1 | grep -q -- "--realm"; then
-              REALM_OPT="--realm=emulated"
-            fi
-            nohup "${s}WORK/frida-inject" -n "${s}PKG" -s "${s}WORK/agent.js" \
-              --runtime=qjs ${s}REALM_OPT \
+            # Attach in the NATIVE realm (the default — no --realm flag). This
+            # agent hooks Java (the Xigncode bypass via Java.perform), and Frida
+            # can only reach the Java VM from the native realm; the emulated
+            # realm (ARM-on-x86 NativeBridge) would silently skip the anti-cheat
+            # bypass. Attach to the resolved PID (-p) rather than by name (-n),
+            # which is ambiguous and can miss when the cmdline != package name.
+            nohup "${s}WORK/frida-inject" -p "${s}PID" -s "${s}WORK/agent.js" \
+              --runtime=qjs \
               >"${s}WORK/inject.log" 2>&1 &
-            echo PIXEL_INJECTED
+            IPID=${s}!
+            # Don't report success blindly: if frida-inject dies right after
+            # launch (ptrace blocked by SELinux, ABI mismatch, agent syntax
+            # error) the panel never comes up. Give it a moment, then confirm
+            # it's still attached; otherwise surface the log so the UI can show
+            # a real failure instead of spinning on a panel that never loads.
+            sleep 2
+            if kill -0 "${s}IPID" 2>/dev/null || pidof frida-inject >/dev/null 2>&1; then
+              echo PIXEL_INJECTED
+            else
+              echo PIXEL_FAIL
+              tail -n 20 "${s}WORK/inject.log" 2>/dev/null || true
+            fi
         """.trimIndent()
 
         return try {
@@ -102,6 +110,7 @@ object Injector {
                 out.contains("PIXEL_ALREADY") -> Result.ALREADY_RUNNING
                 out.contains("PIXEL_INJECTED") -> Result.INJECTED
                 out.contains("PIXEL_NOGAME") -> Result.GAME_NOT_FOUND
+                out.contains("PIXEL_FAIL") -> Result.ERROR
                 else -> Result.ERROR
             }
         } catch (e: Exception) {
