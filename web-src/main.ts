@@ -765,6 +765,24 @@ const lan:{[key:string]:{[key:string]:string}} = {
         'ja':'フライ速度',
         'zh':'飞行速度',
     },
+    'up':{
+        'en':'Up (hold)',
+        'ko':'상승 (누르기)',
+        'ja':'上昇（長押し）',
+        'zh':'上升（按住）',
+    },
+    'down':{
+        'en':'Down (hold)',
+        'ko':'하강 (누르기)',
+        'ja':'下降（長押し）',
+        'zh':'下降（按住）',
+    },
+    'blackhole-ignore-dead':{
+        'en':'Skip Dead',
+        'ko':'사망 제외',
+        'ja':'死亡を除外',
+        'zh':'排除死亡',
+    },
     'infinite-jump':{
         'en':'Infinite Jump',
         'ko':'무한 점프',
@@ -1651,6 +1669,30 @@ $_('kick-loop-start')?.addEventListener('click', () => {
     ipcRenderer.send('kick-loop-start', slot, interval);
 });
 $_('kick-loop-stop')?.addEventListener('click', () => {ipcRenderer.send('kick-loop-stop');});
+
+// Fly up/down. The agent ascends/descends while keymap[keybinds['fly-up'/
+// 'fly-down']] is held — a desktop keyboard concept. The phone has no
+// keyboard, so we bind those to synthetic key names and feed the agent
+// keyevents from on-screen hold buttons (press = DOWN, release = UP). Fly
+// itself (no-fall hover) is the cheat toggle; these only steer vertical.
+keybinds['fly-up'] = 'FLY_UP';
+keybinds['fly-down'] = 'FLY_DOWN';
+localStorage.setItem('keybinds', JSON.stringify(keybinds));
+ipcRenderer.send('keybind', 'fly-up', 'FLY_UP');
+ipcRenderer.send('keybind', 'fly-down', 'FLY_DOWN');
+const flyKeymap: { [k: string]: boolean } = { FLY_UP: false, FLY_DOWN: false };
+const bindFlyHold = (id: string, key: string) => {
+    const el = $_(id);
+    if(!el) return;
+    const press = (e: Event) => { e.preventDefault(); flyKeymap[key] = true; ipcRenderer.send('keyevent', key, 'DOWN', { ...flyKeymap }); };
+    const release = (e: Event) => { e.preventDefault(); if(!flyKeymap[key]) return; flyKeymap[key] = false; ipcRenderer.send('keyevent', key, 'UP', { ...flyKeymap }); };
+    el.addEventListener('pointerdown', press);
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointerleave', release);
+    el.addEventListener('pointercancel', release);
+};
+bindFlyHold('fly-up', 'FLY_UP');
+bindFlyHold('fly-down', 'FLY_DOWN');
 $_('change-nickname').addEventListener('click', () => {ipcRenderer.send('change-nickname', $i('nickname-value').value || '');});
 $_('purchase-pass').addEventListener('click', () => {ipcRenderer.send('purchase-pass', parseInt($i('purchase-player-number').value) || 0, parseInt($i('purchase-item').value) || 1);});
 // $_('server-exploit').addEventListener('click', () => {ipcRenderer.send('server-exploit');});

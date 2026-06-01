@@ -251,18 +251,52 @@
                     <button id="listen-main" data-lang="autoswap-mainweapon-listen" class="attached" disabled></button>
                 </main>
             </details> -->
-            <!-- Hidden: ESP / blackhole / shoot-speed and other cheats that need
-                 an always-on-top system overlay or a global keyboard hook — both
-                 desktop-only. On phone the WebView panel cannot draw over the
-                 game, so はぐるま exposes the mobile-usable subset (aimbot /
-                 aim-assist / aim-by-circle / no-recoil / no-spread / kicker /
-                 teleport). Agent-side code for the hidden cheats is kept intact
-                 so saved configs and keybinds survive for a future build. -->
+            <!-- Cheats that draw on-game visuals (ESP / aim-circle overlay) still
+                 stay hidden on phone — the WebView panel can't paint over the
+                 game. Everything that works from memory alone is exposed. -->
             <details data-cheat="no-recoil">
                 <summary class="no" id="no-recoil" data-lang="no-recoil"></summary>
             </details>
             <details data-cheat="no-spread">
                 <summary class="no" id="no-spread" data-lang="no-spread"></summary>
+            </details>
+            <details data-cheat="one-kill">
+                <summary class="no" id="one-kill" data-lang="one-kill"></summary>
+            </details>
+            <details data-cheat="no-reload">
+                <summary class="no" id="no-reload" data-lang="no-reload"></summary>
+            </details>
+            <details data-cheat="instant-respawn">
+                <summary class="no" id="instant-respawn" data-lang="instant-respawn"></summary>
+            </details>
+            <details data-cheat="no-clip">
+                <summary class="no" id="no-clip" data-lang="no-clip"></summary>
+            </details>
+            <details data-cheat="fly">
+                <summary id="fly" data-lang="fly"></summary>
+                <main>
+                    <div data-lang="fly-speed"></div>
+                    <input class="config" type="number" min="0.1" max="50" step="0.1" value="1" id="fly-speed">
+                </main>
+                <main>
+                    <button class="w-full fly-hold" id="fly-up" data-lang="up"></button>
+                    <button class="w-full fly-hold" id="fly-down" data-lang="down"></button>
+                </main>
+            </details>
+            <details data-cheat="blackhole">
+                <summary id="blackhole" data-lang="blackhole"></summary>
+                <main>
+                    <div data-lang="blackhole-distance"></div>
+                    <input class="config" type="number" min="0" max="200" value="20" id="blackhole-distance">
+                </main>
+                <main>
+                    <div data-lang="blackhole-ignore-team"></div>
+                    <input class="config" type="checkbox" id="blackhole-ignore-team">
+                </main>
+                <main>
+                    <div data-lang="blackhole-ignore-dead"></div>
+                    <input class="config" type="checkbox" id="blackhole-ignore-dead">
+                </main>
             </details>
             <details data-cheat="kicker">
                 <summary id="kicker" data-lang="kicker"></summary>
@@ -337,10 +371,11 @@
                     <button class="w-full teleport-btn" data-side="choco" data-index="3">4</button>
                 </main>
             </details>
-            <!-- Remaining non-aim cheats stay hidden (ESP, blackhole, fly,
-                 changer, utilities, etc.). Agent-side handlers are intact, so
-                 saved configs and keybinds still work when a future build
-                 re-enables them in the panel. -->
+            <!-- Remaining cheats that need on-game visuals (ESP / aim-circle
+                 overlay) or PC-only utilities stay hidden — the phone WebView
+                 can't draw over the game. Their agent-side handlers are intact,
+                 so saved configs/keybinds still work if a future build exposes
+                 them. -->
         </section>
         <section id="macros" class="hide">
             <input type="text" data-lang-ph="search" id="search-macro" class="w-full">
