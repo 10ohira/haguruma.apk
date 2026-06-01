@@ -231,6 +231,12 @@ class MainActivity : AppCompatActivity() {
         // Release any held direction so the player doesn't keep ascending.
         flyUp = false; flyDown = false
         postCmd("[\"keyevent\",\"FLY_UP\",\"UP\",{\"FLY_UP\":false,\"FLY_DOWN\":false}]")
+        // If the overlay enabled fly, turn it back off on close so the player
+        // isn't left hovering with no visible control to disable it.
+        if (flyOn) {
+            flyOn = false
+            postCmd("[\"cheats\",\"fly\",false]")
+        }
     }
 
     private fun setFlyDir(dir: String, on: Boolean) {

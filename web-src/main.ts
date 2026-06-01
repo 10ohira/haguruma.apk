@@ -1843,8 +1843,11 @@ ipcRenderer.on('search-wp', (e, wps:(WPData&{id:number})[]) => {
     wrap.appendChild(ring);
     wrap.appendChild(label);
     document.body.appendChild(wrap);
+    const details = document.querySelector('details[data-cheat="aim-by-circle"]') as HTMLDetailsElement | null;
     const update = () => {
-        if(config['aim-by-circle-show-circle'] === false){ wrap.style.display = 'none'; return; }
+        // Only while the Aim-by-Circle section is open (calibration), so the
+        // ring never covers the rest of the panel.
+        if(!details || !details.open || config['aim-by-circle-show-circle'] === false){ wrap.style.display = 'none'; return; }
         const r = Math.max(0, Math.min(100, +config['aim-by-circle-radius'] || 0));
         const color = config['aim-by-circle-color'] || '#00ffff';
         const px = Math.round(r * window.innerWidth / 1920);
@@ -1854,6 +1857,7 @@ ipcRenderer.on('search-wp', (e, wps:(WPData&{id:number})[]) => {
         label.textContent = `aim circle ≈ ${px}px (r=${r})`;
         wrap.style.display = 'flex';
     };
+    details?.addEventListener('toggle', update);
     ['aim-by-circle-radius','aim-by-circle-color','aim-by-circle-show-circle'].forEach(id => {
         const el = $_(id);
         if(!el) return;
