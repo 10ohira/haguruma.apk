@@ -2,7 +2,7 @@ name: Build はぐるま
 
 on:
   push:
-    branches: [main, master, claude/haguruma-apk-overhaul-hd41c]
+    branches: [main, master, claude/frida-adb-apk-rooting-EiIiC]
     tags: ['v*']
   workflow_dispatch: {}
 
