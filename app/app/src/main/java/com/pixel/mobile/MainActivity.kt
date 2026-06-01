@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
         private set
     private val ui = Handler(Looper.getMainLooper())
     private var panelMode = false
+    private var panelRetries = 0
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,6 +58,10 @@ class MainActivity : AppCompatActivity() {
         }
         web.addJavascriptInterface(Bridge(this), "PixelNative")
         web.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(v: WebView?, url: String?) {
+                // The real panel came up — stop counting retries.
+                if (panelMode && url != null && url.startsWith("http://127.0.0.1")) panelRetries = 0
+            }
             override fun onReceivedError(
                 v: WebView?, req: android.webkit.WebResourceRequest?,
                 err: android.webkit.WebResourceError?
@@ -64,9 +69,13 @@ class MainActivity : AppCompatActivity() {
                 // Only meaningful once we've navigated to the agent panel, and
                 // only for the main document (a stray subresource error must not
                 // kick a reload loop): the agent may not be up for a moment
-                // right after injection — retry shortly.
+                // right after injection — retry shortly. After enough retries
+                // (~20s) the agent almost certainly failed to come up, so show a
+                // diagnostic instead of spinning forever, but keep retrying in
+                // case it eventually binds.
                 if (panelMode && req?.isForMainFrame == true) {
-                    v?.loadData(WAITING_HTML, "text/html", "utf-8")
+                    panelRetries++
+                    v?.loadData(if (panelRetries >= 8) STUCK_HTML else WAITING_HTML, "text/html", "utf-8")
                     ui.postDelayed({ web.loadUrl(panelUrl) }, 2500)
                 }
             }
@@ -86,6 +95,7 @@ class MainActivity : AppCompatActivity() {
                 when (result) {
                     Injector.Result.INJECTED, Injector.Result.ALREADY_RUNNING -> {
                         panelMode = true
+                        panelRetries = 0
                         web.loadUrl(panelUrl + "?admin=" + if (admin) "1" else "0")
                     }
                     Injector.Result.NO_ROOT ->
@@ -278,6 +288,16 @@ class MainActivity : AppCompatActivity() {
 
         private val WAITING_HTML =
             page("はぐるまエージェントを待機中…<br><br><small>注入が完了すると操作パネルが表示されます。</small>")
+
+        // Shown once the panel has failed to load for a while (~20s). The
+        // injection probably didn't bring the in-agent server up. Keeps
+        // retrying, but tells the user where the real error is instead of
+        // spinning silently forever.
+        private val STUCK_HTML =
+            page("まだエージェントに接続できません…<br><br>" +
+                "<small>注入は成功しても、ゲーム内サーバーが起動していない可能性があります。" +
+                "もう一度「Connect」を試すか、ルートで <code>/data/local/tmp/pixel/inject.log</code> " +
+                "を確認してください（接続でき次第、自動で操作パネルが開きます）。</small>")
 
         // Branded local login -> connect shell. Plain HTML/CSS/JS styled with the
         // desktop はぐるま "workshop" theme (charcoal on cream, square corners,

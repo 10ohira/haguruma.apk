@@ -259,16 +259,19 @@
     });
   }
 
-  // Bind to loopback only. The WebView loads http://127.0.0.1:27345, so the
-  // panel never needs to be reachable from the LAN — and the cmd/SSE endpoints
-  // (which drive the cheats with Access-Control-Allow-Origin: *) must not be
-  // exposed to other devices on the network. Default Socket.listen binds to
-  // all interfaces; pinning host to 127.0.0.1 keeps it on-device.
-  Socket.listen({ host: '127.0.0.1', port: PORT, backlog: 16 }).then(function (listener) {
-    acceptLoop(listener);
-  }).catch(function (e) {
-    // Port busy => a previous injection is still bound. The agent (cheats)
-    // still works; only the UI bridge is unavailable. Surface it on stderr.
-    try { console.error('[pixel-mobile] Socket.listen failed: ' + e); } catch (_) {}
-  });
+  function listenOn(opts) {
+    return Socket.listen(opts).then(function (listener) { acceptLoop(listener); return true; });
+  }
+  // Prefer loopback-only (keeps the cmd/SSE cheat endpoints off the LAN). But
+  // if a particular Frida build / device rejects the host/family combo, the
+  // Promise rejects and the panel would hang on "waiting for agent" forever —
+  // so fall back to binding the port on ALL interfaces, which is the original
+  // behaviour and always comes up. Last resort: log to stderr.
+  listenOn({ family: 'ipv4', host: '127.0.0.1', port: PORT, backlog: 16 })
+    .catch(function () { return listenOn({ port: PORT, backlog: 16 }); })
+    .catch(function (e) {
+      // Port busy => a previous injection is still bound. The agent (cheats)
+      // still works; only the UI bridge is unavailable. Surface it on stderr.
+      try { console.error('[pixel-mobile] Socket.listen failed: ' + e); } catch (_) {}
+    });
 })();
