@@ -33,6 +33,12 @@ class Bridge(private val activity: MainActivity) {
         activity.startConnect(admin)
     }
 
+    /** Panel tapped "Show Fly Overlay": toggle the floating fly controls. */
+    @JavascriptInterface
+    fun flyOverlay() {
+        activity.toggleFlyOverlay()
+    }
+
     /** Returns a JSON string {"ok":bool,"admin":bool,"error":string}. */
     private fun doLogin(id: String, password: String): String {
         val base = HAGURUMA_WEB_URL.trimEnd('/')

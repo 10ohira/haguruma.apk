@@ -47,16 +47,29 @@ all in-game math is identical. The phone panel exposes:
 
 - **Aimbot** — lock-style aim toward the closest in-FOV enemy
 - **Aim Assist** — slows the camera toward an enemy while shooting (no lock)
-- **Aim by Circle** — locks onto enemies whose head sits inside an on-screen circle
+- **Aim by Circle** — locks onto enemies whose head sits inside an on-screen
+  circle. The panel now draws a **size preview** of that circle at its real
+  on-game scale inside the WebView, so the radius can be calibrated by eye.
 - **No Recoil** — native patch on `Spread::Recoil`
 - **No Spread** — native patch on every `Spread::GetAimGapByCurState` bucket
+- **One Kill** — body + head shot damage-rate patch
+- **No Reload** — reload-speed patch (instant reload)
+- **Instant Respawn** — respawn-time patch
+- **No Clip** — `UserMoveSystem::MoveAI` collision patch (walk through walls)
+- **Fly** — no-fall hover, with on-panel Up/Down hold buttons **and** an
+  optional **system overlay** (floating FLY toggle + ▲/▼) that sits over the
+  game, so you can fly without staying on the panel (needs the "Display over
+  other apps" permission).
+- **Blackhole** — pull enemies to your crosshair (distance / skip-team /
+  skip-dead knobs)
 - **Slot Kicker** — `FMatchKickUserSlot` per slot, kick-all-enemy, auto-loop, kick-by-id
 - **Teleport** — per-map CTM milk / choco preset coordinates
 
-**Kick and teleport were re-verified end-to-end** this build: the renderer's
-command names and argument shapes match the agent handlers (teleport → `pos`
-with `[x,y,z]`; kicks → `kick-by-slot` / `kick-all-enemy` / `kick-loop-*` /
-`kick-player`), confirmed present in the bundled agent and renderer.
+**Kick and teleport were re-verified end-to-end** in a prior build: the
+renderer's command names and argument shapes match the agent handlers
+(teleport → `pos` with `[x,y,z]`; kicks → `kick-by-slot` / `kick-all-enemy` /
+`kick-loop-*` / `kick-player`), confirmed present in the bundled agent and
+renderer.
 
 ### How it works
 

@@ -1,13 +1,26 @@
 package com.pixel.mobile
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.graphics.PixelFormat
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Single-APK launcher with full pixel.exe parity.
@@ -96,6 +109,158 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         if (panelMode && web.canGoBack()) web.goBack() else super.onBackPressed()
+    }
+
+    // ---- Fly system overlay (SYSTEM_ALERT_WINDOW) ------------------------
+    // A floating FLY toggle + ▲/▼ hold buttons drawn over the game, so the
+    // user can fly without staying on the panel. The buttons POST straight to
+    // the in-agent server (http://127.0.0.1:27345/cmd) running inside the game
+    // process — the same endpoint the WebView uses — feeding the agent the
+    // `cheats fly` toggle and the synthetic FLY_UP/FLY_DOWN keyevents the
+    // fly-up/down loop checks for. The agent itself is unchanged.
+    private var flyOverlay: View? = null
+    private var flyUp = false
+    private var flyDown = false
+    private var flyOn = false
+
+    fun toggleFlyOverlay() = ui.post {
+        if (flyOverlay != null) { removeFlyOverlay(); return@post }
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Grant \"Display over other apps\", then tap again", Toast.LENGTH_LONG).show()
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            } catch (_: Exception) {}
+            return@post
+        }
+        showFlyOverlay()
+    }
+
+    private fun showFlyOverlay() {
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        val density = resources.displayMetrics.density
+        val pad = (8 * density).toInt()
+
+        // Register the synthetic fly keybinds with the agent (idempotent).
+        postCmd("[\"keybind\",\"fly-up\",\"FLY_UP\"]")
+        postCmd("[\"keybind\",\"fly-down\",\"FLY_DOWN\"]")
+
+        fun mkBtn(txt: String): Button = Button(this).apply {
+            text = txt
+            setTextColor(0xFFFBF6EC.toInt())
+            setBackgroundColor(0xFFC45A2C.toInt())
+            isAllCaps = false
+            val lp = LinearLayout.LayoutParams((120 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.topMargin = pad / 2
+            layoutParams = lp
+        }
+
+        val flyBtn = mkBtn("FLY: OFF")
+        val upBtn = mkBtn("▲ UP")
+        val downBtn = mkBtn("▼ DOWN")
+        val closeBtn = mkBtn("✕ close")
+
+        flyBtn.setOnClickListener {
+            flyOn = !flyOn
+            flyBtn.text = if (flyOn) "FLY: ON" else "FLY: OFF"
+            postCmd("[\"cheats\",\"fly\",$flyOn]")
+        }
+        val hold = { dir: String ->
+            View.OnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { setFlyDir(dir, true); v.performClick(); true }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { setFlyDir(dir, false); true }
+                    else -> false
+                }
+            }
+        }
+        upBtn.setOnTouchListener(hold("FLY_UP"))
+        downBtn.setOnTouchListener(hold("FLY_DOWN"))
+        closeBtn.setOnClickListener { removeFlyOverlay() }
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xCC1F1A14.toInt())
+            setPadding(pad, pad, pad, pad)
+            addView(flyBtn); addView(upBtn); addView(downBtn); addView(closeBtn)
+        }
+
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = (16 * density).toInt()
+            y = (160 * density).toInt()
+        }
+
+        // Drag the panel by its background (buttons consume their own touches).
+        root.setOnTouchListener(object : View.OnTouchListener {
+            var ix = 0; var iy = 0; var dx = 0f; var dy = 0f
+            override fun onTouch(v: View, e: MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { ix = lp.x; iy = lp.y; dx = e.rawX; dy = e.rawY }
+                    MotionEvent.ACTION_MOVE -> {
+                        lp.x = ix + (e.rawX - dx).toInt()
+                        lp.y = iy + (e.rawY - dy).toInt()
+                        try { wm.updateViewLayout(root, lp) } catch (_: Exception) {}
+                    }
+                    else -> return false
+                }
+                // Consume DOWN/MOVE on the background so we keep getting MOVE
+                // for dragging. Child buttons consume their own touches first,
+                // so this only fires for the panel background.
+                return true
+            }
+        })
+
+        try {
+            wm.addView(root, lp)
+            flyOverlay = root
+        } catch (e: Exception) {
+            Toast.makeText(this, "Overlay failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun removeFlyOverlay() {
+        val v = flyOverlay ?: return
+        try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
+        flyOverlay = null
+        // Release any held direction so the player doesn't keep ascending.
+        flyUp = false; flyDown = false
+        postCmd("[\"keyevent\",\"FLY_UP\",\"UP\",{\"FLY_UP\":false,\"FLY_DOWN\":false}]")
+    }
+
+    private fun setFlyDir(dir: String, on: Boolean) {
+        if (dir == "FLY_UP") flyUp = on else flyDown = on
+        val action = if (on) "DOWN" else "UP"
+        postCmd("[\"keyevent\",\"$dir\",\"$action\",{\"FLY_UP\":$flyUp,\"FLY_DOWN\":$flyDown}]")
+    }
+
+    /** Fire-and-forget POST to the in-agent command server (game process). */
+    private fun postCmd(json: String) {
+        Thread {
+            var conn: HttpURLConnection? = null
+            try {
+                conn = (URL("http://127.0.0.1:27345/cmd").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = 1500; readTimeout = 1500; doOutput = true
+                }
+                conn.outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                conn.responseCode
+            } catch (_: Exception) {
+            } finally {
+                conn?.disconnect()
+            }
+        }.start()
+    }
+
+    override fun onDestroy() {
+        removeFlyOverlay()
+        super.onDestroy()
     }
 
     companion object {

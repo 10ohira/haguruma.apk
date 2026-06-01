@@ -783,6 +783,12 @@ const lan:{[key:string]:{[key:string]:string}} = {
         'ja':'死亡を除外',
         'zh':'排除死亡',
     },
+    'fly-overlay':{
+        'en':'Show Fly Overlay',
+        'ko':'플라이 오버레이 표시',
+        'ja':'フライオーバーレイ表示',
+        'zh':'显示飞行悬浮窗',
+    },
     'infinite-jump':{
         'en':'Infinite Jump',
         'ko':'무한 점프',
@@ -1818,4 +1824,51 @@ ipcRenderer.on('search-wp', (e, wps:(WPData&{id:number})[]) => {
         });
         finderOut.appendChild(wpOut);
     });
+});
+// ---- Aim-by-circle on-screen size preview --------------------------------
+// The phone panel can't paint over the live game, so this draws the aim
+// circle at (approximately) its real on-game size INSIDE the WebView, purely
+// from the config — no agent / epos needed — so the radius can be calibrated
+// by eye (works in the lobby too). The agent projects entities against a
+// 1920px-wide reference (half-width 960), so a radius R covers R*screenW/1920
+// CSS px on a full-width display. Centered on the crosshair (screen center).
+(function aimCirclePreview(){
+    const wrap = document.createElement('div');
+    wrap.id = 'aim-circle-preview';
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9990;display:none;align-items:center;justify-content:center';
+    const ring = document.createElement('div');
+    ring.style.cssText = 'border-radius:50%;border:2px dashed #00ffff;box-sizing:border-box';
+    const label = document.createElement('div');
+    label.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:12%;font:600 12px/1 ui-monospace,monospace;color:#00ffff;text-shadow:0 1px 3px rgba(0,0,0,.7);white-space:nowrap';
+    wrap.appendChild(ring);
+    wrap.appendChild(label);
+    document.body.appendChild(wrap);
+    const update = () => {
+        if(config['aim-by-circle-show-circle'] === false){ wrap.style.display = 'none'; return; }
+        const r = Math.max(0, Math.min(100, +config['aim-by-circle-radius'] || 0));
+        const color = config['aim-by-circle-color'] || '#00ffff';
+        const px = Math.round(r * window.innerWidth / 1920);
+        ring.style.width = ring.style.height = (px * 2) + 'px';
+        ring.style.borderColor = color;
+        label.style.color = color;
+        label.textContent = `aim circle ≈ ${px}px (r=${r})`;
+        wrap.style.display = 'flex';
+    };
+    ['aim-by-circle-radius','aim-by-circle-color','aim-by-circle-show-circle'].forEach(id => {
+        const el = $_(id);
+        if(!el) return;
+        el.addEventListener('input', update);
+        el.addEventListener('change', update);
+    });
+    window.addEventListener('resize', update);
+    update();
+})();
+
+// ---- Fly system overlay (native SYSTEM_ALERT_WINDOW) ---------------------
+// A floating FLY toggle + ▲/▼ hold buttons that sit OVER the game, so flying
+// doesn't require staying on the panel. Handled natively (Injector shell can't
+// draw UI); the bridge is only present inside the はぐるま app WebView.
+$_('fly-overlay')?.addEventListener('click', () => {
+    const pn = (window as any).PixelNative;
+    if(pn && typeof pn.flyOverlay === 'function') pn.flyOverlay();
 });
