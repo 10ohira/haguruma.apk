@@ -78,6 +78,7 @@ class Bridge(private val activity: MainActivity) {
     companion object {
         // Operator credentials backend — mirrors the desktop はぐるま
         // (src/data/auth.ts) which posts to /api/haguruma/login on haguruma.web.
+        // Change this to your backend URL. Set empty "" to skip login (offline mode).
         const val HAGURUMA_WEB_URL = "https://haguruma.vercel.app"
     }
 }
