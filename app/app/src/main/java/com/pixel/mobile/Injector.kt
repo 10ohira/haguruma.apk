@@ -55,49 +55,37 @@ object Injector {
             setenforce 0 2>/dev/null || true
             PKG="${PKG}"
             WORK="${WORK}"
-            mkdir -p "\$WORK" || exit 1
-            cp "${agent.absolutePath}" "\$WORK/agent.js" || exit 1
-            cp "${inject.absolutePath}" "\$WORK/frida-inject" || exit 1
-            chmod 755 "\$WORK/frida-inject" 2>/dev/null || true
+            mkdir -p "${'$'}WORK" || exit 1
+            cp "${agent.absolutePath}" "${'$'}WORK/agent.js" || exit 1
+            cp "${inject.absolutePath}" "${'$'}WORK/frida-inject" || exit 1
+            chmod 755 "${'$'}WORK/frida-inject" 2>/dev/null || true
             if pidof frida-inject >/dev/null 2>&1; then echo PIXEL_ALREADY; exit 0; fi
-            PID=\$(pidof "\$PKG" 2>/dev/null || true)
-            # Attach without killing — force-stopping closes the user's
-            # current MilkChoco session for marginal Xigncode-bypass gain
-            # (the in-agent hook still neuters future initialize / getCookie2
-            # calls). If the game isn't running yet we launch it; otherwise
-            # we attach to the existing PID.
-            if [ -z "$PID" ]; then
-              monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || \
-                am start -n "$PKG/com.unity3d.player.UnityPlayerActivity" >/dev/null 2>&1 || true
+            PID=${'$'}(pidof "${'$'}PKG" 2>/dev/null || true)
+            # Attach without killing
+            if [ -z "${'$'}PID" ]; then
+              monkey -p "${'$'}PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || \
+                am start -n "${'$'}PKG/com.unity3d.player.UnityPlayerActivity" >/dev/null 2>&1 || true
               i=0
-              while [ -z "$PID" ] && [ $i -lt 30 ]; do
-                sleep 1; i=$((i+1)); PID=${s}(pidof "$PKG" 2>/dev/null || true)
+              while [ -z "${'$'}PID" ] && [ ${'$'}i -lt 30 ]; do
+                sleep 1; i=${'$'}((i+1)); PID=${'$'}(pidof "${'$'}PKG" 2>/dev/null || true)
               done
             fi
-            [ -n "$PID" ] || { echo PIXEL_NOGAME; exit 0; }
-            # Attach in the NATIVE realm (the default — no --realm flag). This
-            # agent hooks Java (the Xigncode bypass via Java.perform), and Frida
-            # can only reach the Java VM from the native realm; the emulated
-            # realm (ARM-on-x86 NativeBridge) would silently skip the anti-cheat
-            # bypass. Attach to the resolved PID (-p) rather than by name (-n),
-            # which is ambiguous and can miss when the cmdline != package name.
-            nohup "$WORK/frida-inject" -p "$PID" -s "$WORK/agent.js" \
+            [ -n "${'$'}PID" ] || { echo PIXEL_NOGAME; exit 0; }
+            # Attach in NATIVE realm
+            nohup "${'$'}WORK/frida-inject" -p "${'$'}PID" -s "${'$'}WORK/agent.js" \
               --runtime=qjs \
-              >"$WORK/inject.log" 2>&1 &
-            IPID=${s}!
-            # Don't report success blindly: if frida-inject dies right after
-            # launch (ptrace blocked by SELinux, ABI mismatch, agent syntax
-            # error) the panel never comes up. Give it a moment, then confirm
-            # it's still attached; otherwise surface the log so the UI can show
-            # a real failure instead of spinning on a panel that never loads.
+              >"${'$'}WORK/inject.log" 2>&1 &
+            IPID=${'$'}!
+            # Confirm injection
             sleep 2
-            if kill -0 "$IPID" 2>/dev/null || pidof frida-inject >/dev/null 2>&1; then
+            if kill -0 "${'$'}IPID" 2>/dev/null || pidof frida-inject >/dev/null 2>&1; then
               echo PIXEL_INJECTED
             else
               echo PIXEL_FAIL
-              tail -n 20 "$WORK/inject.log" 2>/dev/null || true
+              tail -n 20 "${'$'}WORK/inject.log" 2>/dev/null || true
             fi
         """.trimIndent()
+
 
         return try {
             val p = ProcessBuilder("su", "-c", "sh").redirectErrorStream(true).start()
